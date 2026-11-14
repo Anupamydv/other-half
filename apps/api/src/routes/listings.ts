@@ -173,10 +173,22 @@ listingsRouter.post('/listings/:id/archive', requireSession, asyncRoute(async (r
       data: {status: 'ARCHIVED', archivedAt: new Date()},
     });
     if (archived.count === 1) {
+      const pendingRequests = await transaction.tourRequest.findMany({
+        where: {listingId: id, status: 'PENDING'}, select: {id: true, requesterId: true},
+      });
       await transaction.tourRequest.updateMany({
         where: {listingId: id, status: 'PENDING'},
         data: {status: 'CANCELLED'},
       });
+      if (pendingRequests.length > 0) {
+        await transaction.notification.createMany({data: pendingRequests.map((tourRequest) => ({
+          userId: tourRequest.requesterId,
+          tourRequestId: tourRequest.id,
+          type: 'TOUR_CANCELLED' as const,
+          title: 'Visit request cancelled',
+          body: 'The home listing was archived, so the requested visit was cancelled.',
+        }))});
+      }
     }
     return archived;
   });

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import {CityLandmarkStrip} from './components/CityLandmarkStrip';
 import {ApiStatus} from './components/ApiStatus';
+import {NotificationBell} from './components/NotificationBell';
 import {AuthScreen} from './components/AuthScreen';
 import {CITY_THEMES} from './data/indiaData';
 import {useOtherHalfState} from './hooks/useOtherHalfState';
@@ -337,6 +338,7 @@ export default function App() {
 
           {/* Zone 3: Single Primary Action */}
           <div className="flex items-center shrink-0">
+            <NotificationBell onOpenTours={() => setActiveTab('tours')} />
             <ApiStatus />
             <span className="hidden lg:inline max-w-36 truncate px-3 text-xs font-semibold text-[#64748B]" title={account.user.email}>{account.user.email}</span>
             <button type="button" onClick={() => void handleSignOut()} aria-label="Sign out" title="Sign out" className="mr-2 rounded-full p-2 text-[#64748B] hover:bg-[#F4F2EE] hover:text-[#1E293B]"><LogOut className="h-4 w-4" /></button>

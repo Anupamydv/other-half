@@ -23,6 +23,7 @@ model User {
   sentMessages ConversationMessage[]
   blocksGiven UserBlock[] @relation("UserBlocksGiven")
   blocksReceived UserBlock[] @relation("UserBlocksReceived")
+  notifications Notification[]
 
   @@index([createdAt])
 }
@@ -107,6 +108,7 @@ model TourRequest {
   updatedAt         DateTime          @updatedAt
   listing           Listing           @relation(fields: [listingId], references: [id], onDelete: Cascade)
   requester         User              @relation("TourRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  notifications     Notification[]
 
   @@index([listingId, status, scheduledDate])
   @@index([requesterId, status, createdAt])
@@ -156,6 +158,22 @@ model UserBlock {
   @@index([blockedId])
 }
 
+model Notification {
+  id            String           @id @default(cuid())
+  userId        String
+  tourRequestId String
+  type          NotificationType
+  title         String           @db.VarChar(120)
+  body          String           @db.VarChar(300)
+  createdAt     DateTime         @default(now())
+  readAt        DateTime?
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tourRequest   TourRequest      @relation(fields: [tourRequestId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@index([tourRequestId])
+}
+
 enum City {
   BENGALURU
   MUMBAI
@@ -195,4 +213,11 @@ enum TourTimeSlot {
   MORNING
   AFTERNOON
   EVENING
+}
+
+enum NotificationType {
+  TOUR_REQUESTED
+  TOUR_CONFIRMED
+  TOUR_DECLINED
+  TOUR_CANCELLED
 }

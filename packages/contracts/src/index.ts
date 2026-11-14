@@ -200,3 +200,11 @@ export const conversationDtoSchema = z.object({
 export const conversationPageSchema = z.object({items: z.array(conversationDtoSchema)});
 export type ConversationDto = z.infer<typeof conversationDtoSchema>;
 export type ConversationMessageDto = z.infer<typeof conversationMessageSchema>;
+
+export const notificationTypeSchema = z.enum(['TOUR_REQUESTED', 'TOUR_CONFIRMED', 'TOUR_DECLINED', 'TOUR_CANCELLED']);
+export const notificationDtoSchema = z.object({
+  id: z.string(), type: notificationTypeSchema, title: z.string(), body: z.string(),
+  tourRequestId: z.string(), createdAt: z.iso.datetime(), readAt: z.iso.datetime().nullable(),
+});
+export const notificationListSchema = z.object({items: z.array(notificationDtoSchema), unreadCount: z.number().int().nonnegative()});
+export type NotificationDto = z.infer<typeof notificationDtoSchema>;

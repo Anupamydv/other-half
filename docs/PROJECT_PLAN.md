@@ -63,7 +63,7 @@ Listings are text-only until a private media storage provider is configured. Pub
 - [x] Create a private conversation only after a visit is confirmed, with membership limited to the guest and listing owner.
 - [x] Persist validated messages, paginate history, track unread/read state, and refresh active threads.
 - [x] Let either participant block the other; preserve message history and prevent new sends.
-- [ ] Notifications for request status changes; no automatic fabricated replies.
+- [x] Persist in-app notifications for request, confirmation, decline, and cancellation events; no automatic fabricated replies.
 - Acceptance: only conversation members can read/send; every tour status change is attributable and visible to both parties.
 
 ### 5. Maps and commute discovery
