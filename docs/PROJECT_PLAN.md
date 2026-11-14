@@ -33,7 +33,8 @@ Help people moving within Bengaluru, Mumbai, Delhi NCR, and Hyderabad find compa
 - [x] Same-site cookie policy, origin checks on write requests, and an initial per-process auth rate limit.
 - [x] Persist and validate editable profile details and lifestyle preferences.
 - [x] Edit age and neighborhood; change password and revoke other active sessions.
-- [ ] Email verification, password recovery, account deletion, and production shared rate-limit storage.
+- [ ] Email verification, password recovery, and production shared rate-limit storage.
+- [x] Permanently delete an account and its product data after current-password verification and explicit confirmation; remove associated private listing photos and revoke its sessions through cascading deletion.
 - Acceptance: a user can create an account, return in a new browser session, edit their profile, and access no other user's private data.
 
 The current identity slice implements registration, login/logout, session lookup, and profile/preference updates. Email verification and password recovery are deferred until an email provider and sender domain are configured. The in-memory rate limiter is suitable only for a single API process; deploy behind shared rate-limit storage before scaling to multiple replicas.
@@ -55,6 +56,8 @@ Listing photos use private S3-compatible object storage. The API creates short-l
 Listing owners can optionally select an approximate map pin. The API rounds coordinates to two decimal places (roughly one kilometer) before persisting or returning them; exact pin coordinates never enter the database. This uses the restricted browser Maps key already needed by the map screen. Listings can still be created without a pin or Maps credentials.
 
 The Live Map tab loads active housing listings from the API using the selected city, neighborhood, and cursor pagination. It plots only listings with an owner-approved rounded pin and distinguishes listings without a map location. Commute estimates route from a city hub by default; current browser location is optional and requested only after the member clicks the location control. When provided, the origin is held in component memory and sent to Google Maps for route calculation; it is not sent to the Other Half API or persisted. Members can switch between driving, two-wheeler, transit, and walking estimates. Missing keys, quota failures, provider errors, and unavailable mode/route results have explicit fallback messages and an external Google Maps directions link.
+
+Account deletion is available in Profile & Quiz. The member must re-enter the current password and type an exact confirmation phrase. The API removes private listing photos from configured object storage before deleting the database account; relational cascades remove that account’s sessions and associated product data. A storage deletion failure keeps the database account intact and returns a retryable error. The member can download their account export before deletion.
 
 ### 3. Compatibility and matching
 

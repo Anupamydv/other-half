@@ -77,6 +77,7 @@ app.get('/api/v1/health/live', (_request, response) => {
   response.json({status: 'ok', timestamp: new Date().toISOString()});
 });
 app.use('/api/v1/auth', authRateLimit);
+app.use('/api/v1/account', authRateLimit);
 app.use('/api/v1', authRouter);
 app.use('/api/v1', listingsRouter);
 app.use('/api/v1', listingMediaRouter);

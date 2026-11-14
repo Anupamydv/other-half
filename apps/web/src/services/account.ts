@@ -1,5 +1,16 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000/api/v1';
 
+export async function deleteAccount(currentPassword: string) {
+  const response = await fetch(`${API_BASE_URL}/account`, {
+    method: 'DELETE', credentials: 'include',
+    headers: {'Content-Type': 'application/json', Accept: 'application/json'},
+    body: JSON.stringify({currentPassword, confirmation: 'DELETE MY ACCOUNT'}),
+  });
+  if (response.status === 204) return;
+  const payload = await response.json().catch(() => null) as {error?: {message?: string}} | null;
+  throw new Error(payload?.error?.message ?? 'Could not delete your account.');
+}
+
 export async function downloadAccountData() {
   const response = await fetch(`${API_BASE_URL}/account/export`, {credentials: 'include', headers: {Accept: 'application/json'}});
   if (!response.ok) {

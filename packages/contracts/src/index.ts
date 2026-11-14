@@ -58,6 +58,12 @@ export type LoginInput = z.infer<typeof loginInputSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordInputSchema>;
 export type ProfileUpdate = z.infer<typeof profileUpdateSchema>;
 
+export const deleteAccountInputSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+  confirmation: z.literal('DELETE MY ACCOUNT'),
+});
+export type DeleteAccountInput = z.infer<typeof deleteAccountInputSchema>;
+
 export const listingTypeSchema = z.enum(['PRIVATE_ROOM', 'SHARED_ROOM', 'ENTIRE_FLAT']);
 export const listingAmenitySchema = z.enum([
   'FURNISHED', 'WIFI', 'AIR_CONDITIONING', 'LAUNDRY', 'PARKING', 'PET_FRIENDLY', 'VEGETARIAN_HOUSEHOLD',

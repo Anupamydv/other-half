@@ -1,10 +1,42 @@
 import {Router} from 'express';
+import {deleteAccountInputSchema} from '@other-half/contracts';
 import {prisma} from '../lib/prisma.js';
 import {asyncRoute, HttpError} from '../lib/http.js';
 import {requireSession} from './auth.js';
-import {createSignedViewUrl, MEDIA_STORAGE_CONFIGURED} from '../lib/mediaStorage.js';
+import {env} from '../config/env.js';
+import {verifyPassword} from '../lib/password.js';
+import {createSignedViewUrl, deleteStoredObject, MEDIA_STORAGE_CONFIGURED} from '../lib/mediaStorage.js';
 
 export const accountDataRouter = Router();
+
+accountDataRouter.delete('/account', requireSession, asyncRoute(async (request, response) => {
+  const parsed = deleteAccountInputSchema.safeParse(request.body);
+  if (!parsed.success) throw new HttpError(400, 'VALIDATION_ERROR', parsed.error.issues[0]?.message ?? 'Confirm account deletion.');
+  const userId = response.locals.sessionUserId as string;
+  const user = await prisma.user.findUnique({where: {id: userId}, select: {passwordHash: true}});
+  if (!user || !(await verifyPassword(parsed.data.currentPassword, user.passwordHash))) {
+    throw new HttpError(400, 'CURRENT_PASSWORD_INCORRECT', 'Current password is incorrect.');
+  }
+
+  const media = await prisma.listingMedia.findMany({where: {uploaderId: userId}, select: {objectKey: true}});
+  if (media.length > 0 && !MEDIA_STORAGE_CONFIGURED) {
+    throw new HttpError(503, 'ACCOUNT_MEDIA_DELETE_FAILED', 'Private listing photo storage is unavailable. Your account was not deleted; restore storage access and retry.');
+  }
+  if (MEDIA_STORAGE_CONFIGURED) {
+    try {
+      for (const item of media) await deleteStoredObject(item.objectKey);
+    } catch {
+      throw new HttpError(503, 'ACCOUNT_MEDIA_DELETE_FAILED', 'Private listing photos could not be removed. Your account was not deleted; please retry.');
+    }
+  }
+
+  await prisma.user.delete({where: {id: userId}});
+  response.clearCookie('other_half_session', {
+    httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'lax', path: '/api/v1',
+  });
+  response.setHeader('Cache-Control', 'private, no-store');
+  response.status(204).end();
+}));
 
 accountDataRouter.get('/account/export', requireSession, asyncRoute(async (_request, response) => {
   const userId = response.locals.sessionUserId as string;

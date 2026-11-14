@@ -130,6 +130,13 @@ export default function App() {
     }
   };
 
+  const handleAccountDeleted = () => {
+    setAccount(null);
+    setSessionStatus('anonymous');
+    setSessionMessage('');
+    setActiveTab('explore');
+  };
+
   const saveProfileDetails = async (updates: Partial<Omit<import('./types').UserSelfProfile, 'preferences'>>) => {
     const payload = {
       ...(updates.name !== undefined ? {displayName: updates.name} : {}),
@@ -482,7 +489,7 @@ export default function App() {
             />
           </Suspense>
         )}
-        {activeTab === 'profile' && <Suspense fallback={null}><ProfileSafetySettings />{account.user.isModerator && <ModeratorQueueView />}</Suspense>}
+        {activeTab === 'profile' && <Suspense fallback={null}><ProfileSafetySettings onAccountDeleted={handleAccountDeleted} />{account.user.isModerator && <ModeratorQueueView />}</Suspense>}
       </main>
 
       {/* Mobile Floating Navigation Dock (< 15% Viewport Height) */}
