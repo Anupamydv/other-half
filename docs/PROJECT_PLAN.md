@@ -20,6 +20,7 @@ Help people moving within Bengaluru, Mumbai, Delhi NCR, and Hyderabad find compa
 - [x] Add Express API with liveness/readiness endpoints, secure headers, bounded JSON bodies, and configured CORS.
 - [x] Define PostgreSQL/Prisma user and profile foundation.
 - [x] Add a local Postgres container and environment template.
+- [x] Compile shared contracts and package generated Prisma Client into runnable API build artifacts.
 - [x] Connect the web shell to API readiness and show service state.
 - [ ] Install dependencies, create the first migration, and run the full project locally.
 - [x] Add pull request CI for workspace typechecking, production builds, and Prisma schema validation.

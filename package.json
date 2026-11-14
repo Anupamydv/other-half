@@ -11,16 +11,18 @@
     "packages/*"
   ],
   "scripts": {
+    "predev": "npm run build --workspace=@other-half/contracts",
     "dev": "concurrently -k -n api,web -c cyan,magenta \"npm:dev --workspace=@other-half/api\" \"npm:dev --workspace=@other-half/web\"",
-    "dev:api": "npm run dev --workspace=@other-half/api",
-    "dev:web": "npm run dev --workspace=@other-half/web",
+    "dev:api": "npm run build --workspace=@other-half/contracts && npm run dev --workspace=@other-half/api",
+    "dev:web": "npm run build --workspace=@other-half/contracts && npm run dev --workspace=@other-half/web",
     "db:up": "docker compose -f infra/compose.yaml up -d db",
     "db:down": "docker compose -f infra/compose.yaml down",
+    "infra:up": "docker compose -f infra/compose.yaml up -d db minio minio-init",
     "db:generate": "npm run db:generate --workspace=@other-half/api",
     "db:migrate": "npm run db:migrate --workspace=@other-half/api",
     "db:deploy": "prisma migrate deploy --config=prisma.config.ts",
-    "build": "npm run build --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "build": "npm run build --workspace=@other-half/contracts && npm run build --workspaces --if-present",
+    "typecheck": "npm run build --workspace=@other-half/contracts && npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

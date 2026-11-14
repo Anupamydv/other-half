@@ -37,6 +37,7 @@ We are starting with a modular monolith. Housing discovery, profiles, matching, 
 - Members can download an authenticated JSON export of their profile and account activity. Password hashes, session tokens, and unrelated members’ private profiles are excluded; exported listing-photo links are temporary.
 - Migrations, secrets, backups, structured logs, rate limits, monitoring, and deployment automation are required before public launch.
 - GitHub Actions runs locked dependency installation, workspace typechecking, production builds, and Prisma schema validation on pull requests and pushes to `main`.
+- The shared contracts package is compiled before workspace builds, and the API build packages its generated Prisma Client into `dist`; runtime containers must run the compiled API with production environment variables rather than the development TypeScript loader.
 
 ## Repository layout
 
