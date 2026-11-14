@@ -24,7 +24,8 @@ Help people moving within Bengaluru, Mumbai, Delhi NCR, and Hyderabad find compa
 - [x] Connect the web shell to API readiness and show service state.
 - [ ] Install dependencies, create the first migration, and run the full project locally.
 - [x] Add pull request CI for workspace typechecking, production builds, and Prisma schema validation.
-- [ ] Add error reporting and deployment configuration.
+- [ ] Add error reporting and production observability.
+- [x] Add production container images, health checks, and a pre-deploy migration step.
 
 ### 1. Identity and profile - in progress
 
