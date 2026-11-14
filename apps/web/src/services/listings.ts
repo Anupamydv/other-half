@@ -27,6 +27,7 @@ export async function getListings(filters: {
   availableBy?: string;
   amenities?: ListingAmenity[];
   cursor?: string;
+  limit?: number;
 }, signal?: AbortSignal) {
   const query = new URLSearchParams({cityId: filters.cityId});
   if (filters.neighborhood) query.set('neighborhood', filters.neighborhood);
@@ -35,6 +36,7 @@ export async function getListings(filters: {
   if (filters.availableBy) query.set('availableBy', filters.availableBy);
   if (filters.amenities?.length) query.set('amenities', filters.amenities.join(','));
   if (filters.cursor) query.set('cursor', filters.cursor);
+  if (filters.limit) query.set('limit', String(filters.limit));
   return parsePage(await apiRequest<unknown>(`/listings?${query}`, {signal}));
 }
 

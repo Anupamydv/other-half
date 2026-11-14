@@ -54,6 +54,8 @@ Listing photos use private S3-compatible object storage. The API creates short-l
 
 Listing owners can optionally select an approximate map pin. The API rounds coordinates to two decimal places (roughly one kilometer) before persisting or returning them; exact pin coordinates never enter the database. This uses the restricted browser Maps key already needed by the map screen. Listings can still be created without a pin or Maps credentials.
 
+The Live Map tab loads active housing listings from the API using the selected city, neighborhood, and cursor pagination. It plots only listings with an owner-approved rounded pin and distinguishes listings without a map location. Commute estimates route from a city hub by default; current browser location is optional and requested only after the member clicks the location control. When provided, the origin is held in component memory and sent to Google Maps for route calculation; it is not sent to the Other Half API or persisted. Members can switch between driving, two-wheeler, transit, and walking estimates. Missing keys, quota failures, provider errors, and unavailable mode/route results have explicit fallback messages and an external Google Maps directions link.
+
 ### 3. Compatibility and matching
 
 - [x] Persist lifestyle answers and show a deterministic, documented compatibility score on opted-in member profiles.
@@ -77,8 +79,8 @@ Discovery is account-backed and city-scoped. Profiles are hidden until the membe
 ### 5. Maps and commute discovery
 
 - [x] Browse owner-opted-in approximate listing pins on a map alongside filtered housing search.
-- Browser geolocation with clear consent and manual fallback; do not persist precise user location by default.
-- Maps and routing through restricted, monitored provider credentials; handle quotas, provider errors, and unsupported travel modes.
+- [x] Browser geolocation is requested only by user action, with a city-hub origin fallback; never persist precise user location.
+- [x] Show commute estimates through the configured Maps provider and handle missing credentials, quotas, provider errors, and unsupported travel modes.
 - Acceptance: navigation only uses user-approved origin and clearly distinguishes estimate from confirmed address.
 
 ### 6. Launch readiness

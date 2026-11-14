@@ -52,6 +52,9 @@ const ModeratorQueueView = lazy(() =>
 const ListingsView = lazy(() =>
   import('./components/ListingsView').then((module) => ({default: module.ListingsView}))
 );
+const ListingMapNavigator = lazy(() =>
+  import('./components/ListingMapNavigator').then((module) => ({default: module.ListingMapNavigator}))
+);
 const ToursView = lazy(() =>
   import('./components/ToursView').then((module) => ({default: module.ToursView}))
 );
@@ -300,7 +303,7 @@ export default function App() {
 
       <div className="mx-auto mt-3 max-w-[1240px] px-4 sm:px-6 lg:px-10">
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs leading-5 text-amber-900">
-          Homes, Tours, Messages, and roommate discovery use saved API data. Community feed and map cards are sample content.
+          Homes and commute pins use saved listing data and privacy-rounded locations. The community feed and roommate discovery currently include sample content.
         </p>
         {interactionNotice && <div role="status" className="mt-2 flex items-start justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-xs leading-5 text-sky-900"><span>{interactionNotice}</span><button aria-label="Dismiss" onClick={() => setInteractionNotice('')} className="font-bold">×</button></div>}
       </div>
@@ -434,19 +437,8 @@ export default function App() {
         {/* FULL MAP TAB */}
         {activeTab === 'map' && (
           <div className="space-y-5">
-            <CityLandmarkStrip
-              city={currentCityTheme}
-              onFocusLandmark={handleFocusLandmark}
-            />
-            <Suspense fallback={<div className="h-[440px] rounded-2xl bg-white animate-pulse" aria-label="Loading map" />}>
-              <GoogleMapsNavigator
-                city={currentCityTheme}
-                flats={cityProfiles}
-                selectedFlatId={selectedFlatId}
-                onSelectFlat={(flat) => setSelectedFlatId(flat.id)}
-                onOpenFlatDetail={(flat) => setDetailProfile(flat)}
-                focusedLandmark={focusedLandmark}
-              />
+            <Suspense fallback={<div className="h-[440px] rounded-2xl bg-white animate-pulse" aria-label="Loading housing map" />}>
+              <ListingMapNavigator cityId={selectedCity} neighborhood={selectedNeighborhood} onBrowseHomes={() => setActiveTab('listings')} />
             </Suspense>
           </div>
         )}
