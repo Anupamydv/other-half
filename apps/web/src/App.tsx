@@ -95,7 +95,7 @@ export default function App() {
     setSelectedCity(next.profile.cityId);
     updateUserProfileDetails({
       name: next.profile.displayName,
-      age: next.profile.age ?? 0,
+      age: next.profile.age,
       role: next.profile.role ?? '',
       cityId: next.profile.cityId,
       neighborhood: next.profile.neighborhood ?? 'All Areas',
@@ -142,6 +142,7 @@ export default function App() {
     const payload = {
       ...(updates.name !== undefined ? {displayName: updates.name} : {}),
       ...(updates.role !== undefined ? {role: updates.role} : {}),
+      ...(updates.age !== undefined ? {age: updates.age} : {}),
       ...(updates.cityId !== undefined ? {cityId: updates.cityId} : {}),
       ...(updates.neighborhood !== undefined ? {neighborhood: updates.neighborhood} : {}),
       ...(updates.bio !== undefined ? {bio: updates.bio} : {}),
@@ -161,15 +162,11 @@ export default function App() {
     if (account) setAccount({...account, profile: result.profile});
   };
 
-  if (sessionStatus === 'loading') {
-    return <main className="min-h-screen flex items-center justify-center text-sm font-semibold text-[#64748B]">Connecting to your account…</main>;
-  }
-  if (sessionStatus === 'unavailable') {
-    return <main className="min-h-screen flex items-center justify-center px-4"><section className="max-w-md rounded-3xl bg-white p-7 text-center shadow-kinship-2"><h1 className="text-xl font-extrabold">Account service unavailable</h1><p className="mt-2 text-sm text-[#64748B]">{sessionMessage}</p><button onClick={() => void loadSession()} className="mt-5 rounded-xl bg-[#1E293B] px-5 py-3 text-sm font-bold text-white">Try again</button></section></main>;
-  }
-  if (!account || sessionStatus !== 'authenticated') {
-    return <AuthScreen onAuthenticated={acceptAccount} />;
-  }
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    await apiRequest<void>('/auth/password', {
+      method: 'POST', body: JSON.stringify({currentPassword, newPassword}),
+    });
+  };
 
   const [activeTab, setActiveTab] = useState<AppTab>('explore');
   const [exploreMode, setExploreMode] = useState<ExploreMode>('feed');
@@ -270,6 +267,16 @@ export default function App() {
     setActiveChatProfileId(profileId);
     setActiveTab('messages');
   };
+
+  if (sessionStatus === 'loading') {
+    return <main className="min-h-screen flex items-center justify-center text-sm font-semibold text-[#64748B]">Connecting to your account…</main>;
+  }
+  if (sessionStatus === 'unavailable') {
+    return <main className="min-h-screen flex items-center justify-center px-4"><section className="max-w-md rounded-3xl bg-white p-7 text-center shadow-kinship-2"><h1 className="text-xl font-extrabold">Account service unavailable</h1><p className="mt-2 text-sm text-[#64748B]">{sessionMessage}</p><button onClick={() => void loadSession()} className="mt-5 rounded-xl bg-[#1E293B] px-5 py-3 text-sm font-bold text-white">Try again</button></section></main>;
+  }
+  if (!account || sessionStatus !== 'authenticated') {
+    return <AuthScreen onAuthenticated={acceptAccount} />;
+  }
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#1E293B] pb-24 md:pb-12">
@@ -552,6 +559,7 @@ export default function App() {
               userProfile={userProfile}
               onUpdatePreferences={savePreferences}
               onUpdateDetails={saveProfileDetails}
+              onChangePassword={changePassword}
               onResetSwipeDeck={resetSwipeDeck}
             />
           </Suspense>

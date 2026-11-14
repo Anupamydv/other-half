@@ -33,6 +33,14 @@ export const loginInputSchema = z.object({
   password: z.string().min(1).max(128),
 });
 
+export const changePasswordInputSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+  newPassword: z.string().min(12).max(128),
+}).refine((value) => value.currentPassword !== value.newPassword, {
+  path: ['newPassword'],
+  message: 'Choose a password different from your current one.',
+});
+
 export const profileUpdateSchema = z.object({
   displayName: z.string().trim().min(2).max(80).optional(),
   age: z.number().int().min(18).max(100).nullable().optional(),
@@ -46,4 +54,5 @@ export const profileUpdateSchema = z.object({
 export type LifestylePreferences = z.infer<typeof lifestylePreferencesSchema>;
 export type RegisterInput = z.infer<typeof registerInputSchema>;
 export type LoginInput = z.infer<typeof loginInputSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordInputSchema>;
 export type ProfileUpdate = z.infer<typeof profileUpdateSchema>;

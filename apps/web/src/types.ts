@@ -164,7 +164,7 @@ export interface BookedTour {
 
 export interface UserSelfProfile {
   name: string;
-  age: number;
+  age: number | null;
   role: string;
   cityId: CityId;
   neighborhood: string;

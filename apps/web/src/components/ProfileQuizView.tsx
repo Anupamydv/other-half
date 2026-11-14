@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useState, type FormEvent} from 'react';
 import {CheckCircle2, RotateCcw, SlidersHorizontal, Sparkles} from 'lucide-react';
 import {CITY_THEMES} from '../data/indiaData';
 import {
@@ -16,6 +16,7 @@ interface ProfileQuizViewProps {
   userProfile: UserSelfProfile;
   onUpdatePreferences: (prefs: LifestylePreferences) => void | Promise<void>;
   onUpdateDetails: (updates: Partial<Omit<UserSelfProfile, 'preferences'>>) => void | Promise<void>;
+  onChangePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   onResetSwipeDeck: () => void;
 }
 
@@ -23,12 +24,19 @@ export const ProfileQuizView: React.FC<ProfileQuizViewProps> = ({
   userProfile,
   onUpdatePreferences,
   onUpdateDetails,
+  onChangePassword,
   onResetSwipeDeck,
 }) => {
   const [prefs, setPrefs] = useState<LifestylePreferences>(userProfile.preferences);
   const [details, setDetails] = useState(userProfile);
   const [savedNotice, setSavedNotice] = useState(false);
   const [errorNotice, setErrorNotice] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [passwordBusy, setPasswordBusy] = useState(false);
 
   useEffect(() => {
     setPrefs(userProfile.preferences);
@@ -50,11 +58,36 @@ export const ProfileQuizView: React.FC<ProfileQuizViewProps> = ({
   const handleSaveDetails = async () => {
     setErrorNotice('');
     try {
-      await onUpdateDetails({name: details.name, role: details.role, cityId: details.cityId, bio: details.bio});
+      await onUpdateDetails({
+        name: details.name, age: details.age, role: details.role, cityId: details.cityId,
+        neighborhood: details.neighborhood, bio: details.bio,
+      });
       setSavedNotice(true);
       setTimeout(() => setSavedNotice(false), 1800);
     } catch (error) {
       setErrorNotice(error instanceof Error ? error.message : 'Could not save your profile.');
+    }
+  };
+
+  const handleChangePassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess('');
+    if (newPassword !== confirmPassword) {
+      setPasswordError('The new password and confirmation do not match.');
+      return;
+    }
+    setPasswordBusy(true);
+    try {
+      await onChangePassword(currentPassword, newPassword);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordSuccess('Password changed. Other signed-in sessions have been signed out.');
+    } catch (error) {
+      setPasswordError(error instanceof Error ? error.message : 'Could not change your password.');
+    } finally {
+      setPasswordBusy(false);
     }
   };
 
@@ -118,6 +151,26 @@ export const ProfileQuizView: React.FC<ProfileQuizViewProps> = ({
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-[#1E293B] mb-1">Age</label>
+              <input
+                type="number" min={18} max={100} value={details.age ?? ''}
+                onChange={(e) => setDetails((prev) => ({...prev, age: e.target.value === '' ? null : Number(e.target.value)}))}
+                className="w-full h-11 px-4 rounded-xl bg-[#F4F2EE] text-xs font-semibold text-[#1E293B] focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#F05A4A]/40"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-[#1E293B] mb-1">Neighborhood</label>
+              <input
+                type="text" maxLength={100} value={details.neighborhood}
+                onChange={(e) => setDetails((prev) => ({...prev, neighborhood: e.target.value}))}
+                className="w-full h-11 px-4 rounded-xl bg-[#F4F2EE] text-xs font-semibold text-[#1E293B] focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#F05A4A]/40"
+                placeholder="e.g. Indiranagar"
+              />
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs font-bold text-[#1E293B] mb-1">
               About You
@@ -144,6 +197,19 @@ export const ProfileQuizView: React.FC<ProfileQuizViewProps> = ({
             <span>Reset Swipe Deck</span>
           </button>
         </div>
+
+        <form onSubmit={(event) => void handleChangePassword(event)} className="space-y-3 border-t border-slate-900/5 pt-4">
+          <div>
+            <h3 className="text-sm font-extrabold text-[#1E293B]">Change password</h3>
+            <p className="mt-1 text-xs leading-5 text-[#64748B]">Use a passphrase with at least 12 characters. Other devices will need to sign in again.</p>
+          </div>
+          <input aria-label="Current password" type="password" autoComplete="current-password" required maxLength={128} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Current password" className="h-11 w-full rounded-xl bg-[#F4F2EE] px-4 text-sm outline-none focus:ring-2 focus:ring-[#F05A4A]/40" />
+          <input aria-label="New password" type="password" autoComplete="new-password" required minLength={12} maxLength={128} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password (12+ characters)" className="h-11 w-full rounded-xl bg-[#F4F2EE] px-4 text-sm outline-none focus:ring-2 focus:ring-[#F05A4A]/40" />
+          <input aria-label="Confirm new password" type="password" autoComplete="new-password" required minLength={12} maxLength={128} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm new password" className="h-11 w-full rounded-xl bg-[#F4F2EE] px-4 text-sm outline-none focus:ring-2 focus:ring-[#F05A4A]/40" />
+          {passwordError && <p role="alert" className="text-sm text-red-700">{passwordError}</p>}
+          {passwordSuccess && <p role="status" className="text-sm text-emerald-700">{passwordSuccess}</p>}
+          <button disabled={passwordBusy} className="w-full rounded-xl bg-[#F4F2EE] px-4 py-3 text-sm font-bold text-[#1E293B] hover:bg-[#EAE6DF] disabled:opacity-60">{passwordBusy ? 'Updating…' : 'Update password'}</button>
+        </form>
       </div>
 
       {/* Right: Interactive 6-Axis Lifestyle Compatibility Quiz */}
