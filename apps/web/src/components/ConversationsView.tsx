@@ -1,7 +1,8 @@
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import {Ban, MessageCircle, RefreshCw, Send, ShieldCheck} from 'lucide-react';
+import {Ban, Flag, MessageCircle, RefreshCw, Send, ShieldCheck} from 'lucide-react';
 import type {ConversationDto, ConversationMessageDto} from '@other-half/contracts';
 import {getConversations, getMessages, markConversationRead, sendConversationMessage, setConversationBlocked} from '../services/conversations';
+import {ReportMemberDialog} from './ReportMemberDialog';
 
 interface Props {userId: string; initialConversationId: string | null}
 
@@ -14,6 +15,7 @@ export function ConversationsView({userId, initialConversationId}: Props) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
   const active = useMemo(() => conversations.find((item) => item.id === activeId) ?? null, [conversations, activeId]);
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
@@ -90,7 +92,7 @@ export function ConversationsView({userId, initialConversationId}: Props) {
   };
 
   if (loading) return <div className="rounded-3xl bg-white p-10 text-center text-sm text-[#64748B]">Loading your conversations…</div>;
-  return <section className="space-y-4">
+  return <>{active && reportOpen && <ReportMemberDialog userId={active.peerId} displayName={active.peerDisplayName} onClose={() => setReportOpen(false)} />}<section className="space-y-4">
     <header className="rounded-[28px] bg-white p-5 shadow-kinship-1 sm:p-6"><p className="text-xs font-extrabold uppercase tracking-[0.16em] text-[#F05A4A]">Plan the visit</p><h1 className="mt-1 text-2xl font-extrabold">Messages</h1><p className="mt-1 text-sm text-[#64748B]">Private chats open after a visit window is confirmed.</p></header>
     {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error} <button className="ml-2 font-bold underline" onClick={() => void refresh().catch(() => undefined)}>Retry</button></p>}
     <div className="grid min-h-[520px] gap-4 lg:grid-cols-12">
@@ -98,11 +100,11 @@ export function ConversationsView({userId, initialConversationId}: Props) {
         {conversations.length === 0 && <div className="rounded-2xl bg-white p-6 text-center"><MessageCircle className="mx-auto h-7 w-7 text-[#F05A4A]"/><p className="mt-3 font-bold">No conversations yet</p><p className="mt-1 text-sm leading-5 text-[#64748B]">Once a home visit is confirmed, you can message the other person here.</p></div>}</aside>
       <div className="flex min-h-[520px] flex-col rounded-[28px] bg-white shadow-kinship-1 lg:col-span-8">
         {active ? <>
-          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-900/5 p-4"><div><h2 className="font-extrabold">{active.peerDisplayName}</h2><p className="text-xs text-[#64748B]">{active.listingTitle} · {active.neighborhood}</p></div><button disabled={busy || active.blockedByPeer} onClick={() => void toggleBlock()} className="inline-flex items-center gap-1 rounded-full bg-[#F4F2EE] px-3 py-2 text-xs font-bold disabled:opacity-50"><Ban className="h-3.5 w-3.5"/>{active.blockedByMe ? 'Unblock' : 'Block'}</button></header>
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-900/5 p-4"><div><h2 className="font-extrabold">{active.peerDisplayName}</h2><p className="text-xs text-[#64748B]">{active.listingTitle} · {active.neighborhood}</p></div><div className="flex gap-2"><button onClick={() => setReportOpen(true)} className="inline-flex items-center gap-1 rounded-full bg-[#F4F2EE] px-3 py-2 text-xs font-bold"><Flag className="h-3.5 w-3.5"/>Report</button><button disabled={busy || active.blockedByPeer} onClick={() => void toggleBlock()} className="inline-flex items-center gap-1 rounded-full bg-[#F4F2EE] px-3 py-2 text-xs font-bold disabled:opacity-50"><Ban className="h-3.5 w-3.5"/>{active.blockedByMe ? 'Unblock' : 'Block'}</button></div></header>
           <div className="flex-1 space-y-3 overflow-y-auto bg-[#FAF9F6]/60 p-4">{nextCursor && <button onClick={() => void older()} disabled={busy} className="mx-auto flex items-center gap-1 rounded-full bg-white px-3 py-2 text-xs font-bold"><RefreshCw className="h-3 w-3"/>Load older messages</button>}{messages.map((message) => {const mine = message.senderId === userId; return <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[82%] rounded-2xl px-4 py-2.5 text-sm ${mine ? 'rounded-br-sm bg-[#F05A4A] text-white' : 'rounded-bl-sm border border-slate-900/5 bg-white text-[#1E293B]'}`}><p className="whitespace-pre-wrap break-words">{message.body}</p><time className={`mt-1 block text-[10px] ${mine ? 'text-white/75' : 'text-[#64748B]'}`}>{new Date(message.createdAt).toLocaleString('en-IN', {dateStyle: 'short', timeStyle: 'short'})}</time></div></div>;})}{messages.length === 0 && <div className="py-12 text-center text-sm text-[#64748B]"><ShieldCheck className="mx-auto mb-2 h-7 w-7 text-emerald-600"/>Visit confirmed. Coordinate a convenient time and any arrival details.</div>}</div>
           {active.blockedByMe || active.blockedByPeer ? <p className="border-t border-slate-900/5 p-4 text-center text-sm text-[#64748B]">{active.blockedByMe ? 'You blocked this member. Unblock to send messages.' : 'Messaging is unavailable for this conversation.'}</p> : <form onSubmit={(event) => void send(event)} className="flex gap-2 border-t border-slate-900/5 p-4"><input value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={2000} placeholder={`Message ${active.peerDisplayName}…`} className="h-12 min-w-0 flex-1 rounded-full bg-[#F4F2EE] px-4 text-sm outline-none focus:ring-2 focus:ring-[#F05A4A]/40"/><button disabled={busy || !draft.trim()} aria-label="Send message" className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#F05A4A] text-white disabled:opacity-40"><Send className="h-4 w-4"/></button></form>}
         </> : <div className="grid flex-1 place-items-center p-8 text-center text-sm text-[#64748B]">Select a conversation to view the messages.</div>}
       </div>
     </div>
-  </section>;
+  </section></>;
 }

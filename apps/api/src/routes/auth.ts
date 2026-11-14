@@ -111,7 +111,7 @@ authRouter.post('/auth/register', asyncRoute(async (request, response) => {
       include: {profile: true},
     });
     setSessionCookie(response, token);
-    response.status(201).json({user: {id: user.id, email: user.email}, profile: serializeProfile(user.profile)});
+    response.status(201).json({user: {id: user.id, email: user.email, isModerator: user.isModerator}, profile: serializeProfile(user.profile)});
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       throw new HttpError(409, 'EMAIL_UNAVAILABLE', 'An account with that email already exists.');
@@ -128,7 +128,7 @@ authRouter.post('/auth/login', asyncRoute(async (request, response) => {
     throw new HttpError(401, 'INVALID_CREDENTIALS', 'Email or password is incorrect.');
   }
   await createSession(user.id, response);
-  response.json({user: {id: user.id, email: user.email}, profile: serializeProfile(user.profile)});
+  response.json({user: {id: user.id, email: user.email, isModerator: user.isModerator}, profile: serializeProfile(user.profile)});
 }));
 
 authRouter.get('/auth/me', requireSession, asyncRoute(async (request, response) => {
@@ -136,7 +136,7 @@ authRouter.get('/auth/me', requireSession, asyncRoute(async (request, response) 
     where: {id: response.locals.sessionUserId as string}, include: {profile: true},
   });
   if (!user) throw new HttpError(401, 'UNAUTHENTICATED', 'Please sign in to continue.');
-  response.json({user: {id: user.id, email: user.email}, profile: serializeProfile(user.profile)});
+  response.json({user: {id: user.id, email: user.email, isModerator: user.isModerator}, profile: serializeProfile(user.profile)});
 }));
 
 authRouter.post('/auth/logout', asyncRoute(async (request, response) => {

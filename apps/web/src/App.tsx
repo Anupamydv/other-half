@@ -44,6 +44,12 @@ const ConversationsView = lazy(() =>
 const ProfileQuizView = lazy(() =>
   import('./components/ProfileQuizView').then((module) => ({default: module.ProfileQuizView}))
 );
+const ProfileSafetySettings = lazy(() =>
+  import('./components/ProfileSafetySettings').then((module) => ({default: module.ProfileSafetySettings}))
+);
+const ModeratorQueueView = lazy(() =>
+  import('./components/ModeratorQueueView').then((module) => ({default: module.ModeratorQueueView}))
+);
 const ListingsView = lazy(() =>
   import('./components/ListingsView').then((module) => ({default: module.ListingsView}))
 );
@@ -527,6 +533,7 @@ export default function App() {
             />
           </Suspense>
         )}
+        {activeTab === 'profile' && <Suspense fallback={null}><ProfileSafetySettings />{account.user.isModerator && <ModeratorQueueView />}</Suspense>}
       </main>
 
       {/* Mobile Floating Navigation Dock (< 15% Viewport Height) */}

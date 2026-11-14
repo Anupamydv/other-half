@@ -11,6 +11,7 @@ model User {
   id           String    @id @default(cuid())
   email        String    @unique
   passwordHash String
+  isModerator  Boolean   @default(false)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   profile      Profile?
@@ -28,6 +29,9 @@ model User {
   discoveryActionsReceived DiscoveryAction[] @relation("DiscoveryActionTarget")
   lowMatches Match[] @relation("MatchLowUser")
   highMatches Match[] @relation("MatchHighUser")
+  reportsSubmitted UserReport[] @relation("ReportAuthor")
+  reportsReceived UserReport[] @relation("ReportSubject")
+  reportsReviewed UserReport[] @relation("ReportReviewer")
 
   @@index([createdAt])
 }
@@ -209,6 +213,26 @@ model Match {
   @@index([highUserId, createdAt])
 }
 
+model UserReport {
+  id             String           @id @default(cuid())
+  reporterId     String
+  reportedUserId String
+  reviewerId     String?
+  reason         UserReportReason
+  details        String           @default("") @db.VarChar(1000)
+  status         UserReportStatus @default(OPEN)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  reviewedAt     DateTime?
+  reporter       User             @relation("ReportAuthor", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser   User             @relation("ReportSubject", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  reviewer       User?            @relation("ReportReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([reportedUserId, status, createdAt])
+  @@index([reporterId, createdAt])
+}
+
 enum City {
   BENGALURU
   MUMBAI
@@ -261,4 +285,19 @@ enum DiscoveryActionType {
   PASS
   LIKE
   SUPER_LIKE
+}
+
+enum UserReportReason {
+  HARASSMENT
+  SCAM
+  INAPPROPRIATE
+  FAKE_PROFILE
+  OTHER
+}
+
+enum UserReportStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  DISMISSED
 }

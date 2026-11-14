@@ -54,7 +54,7 @@ Listings are text-only until a private media storage provider is configured. Pub
 - [x] Persist lifestyle answers and show a deterministic, documented compatibility score on opted-in member profiles.
 - [x] Record pass/like/super-like actions idempotently; create a match and private conversation only under the mutual-interest rule.
 - [x] Require explicit discovery opt-in, including a self-declared age of 18 or older; only return profile fields needed for discovery.
-- Add moderation/report/block controls before broad discovery.
+- [x] Add member reporting, moderator review, and block/unblock controls before broad discovery.
 - Acceptance: match state is consistent across devices, cannot be forged by changing browser storage, and opt-out profiles never appear in discovery.
 
 Discovery is account-backed and city-scoped. Profiles are hidden until the member explicitly enables discovery; each member can make one durable action per profile. Likes and super-likes count as positive interest. When both members have expressed positive interest, the API creates a normalized match record and a private match conversation in one transaction. The compatibility percentage is informational and never determines who can match.

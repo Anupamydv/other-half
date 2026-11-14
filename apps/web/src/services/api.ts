@@ -24,7 +24,7 @@ export interface AccountProfile {
 }
 
 export interface AccountResponse {
-  user: {id: string; email: string};
+  user: {id: string; email: string; isModerator: boolean};
   profile: AccountProfile;
 }
 

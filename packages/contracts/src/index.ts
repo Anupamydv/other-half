@@ -236,3 +236,22 @@ export const discoveryActionResponseSchema = z.object({
 });
 export type PublicProfileDto = z.infer<typeof publicProfileSchema>;
 export type MatchDto = z.infer<typeof matchDtoSchema>;
+
+export const reportReasonSchema = z.enum(['HARASSMENT', 'SCAM', 'INAPPROPRIATE', 'FAKE_PROFILE', 'OTHER']);
+export const reportStatusSchema = z.enum(['OPEN', 'IN_REVIEW', 'RESOLVED', 'DISMISSED']);
+export const createReportSchema = z.object({reason: reportReasonSchema, details: z.string().trim().max(1000).default('')});
+export const updateReportStatusSchema = z.object({status: z.enum(['IN_REVIEW', 'RESOLVED', 'DISMISSED'])});
+export const userReportDtoSchema = z.object({
+  id: z.string(), reportedUserId: z.string(), reportedDisplayName: z.string(), reason: reportReasonSchema,
+  details: z.string(), status: reportStatusSchema, createdAt: z.iso.datetime(), reviewedAt: z.iso.datetime().nullable(),
+});
+export const moderationReportDtoSchema = userReportDtoSchema.extend({
+  reporterId: z.string(), reporterDisplayName: z.string(),
+});
+export const reportListSchema = z.object({items: z.array(moderationReportDtoSchema)});
+export const myReportsSchema = z.object({items: z.array(userReportDtoSchema)});
+export const blockedUserSchema = z.object({userId: z.string(), displayName: z.string(), cityId: cityIdSchema, blockedAt: z.iso.datetime()});
+export const blockedUsersSchema = z.object({items: z.array(blockedUserSchema)});
+export type UserReportDto = z.infer<typeof userReportDtoSchema>;
+export type ModerationReportDto = z.infer<typeof moderationReportDtoSchema>;
+export type BlockedUserDto = z.infer<typeof blockedUserSchema>;

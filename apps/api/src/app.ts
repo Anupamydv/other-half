@@ -13,6 +13,7 @@ import {tourRequestsRouter} from './routes/tourRequests.js';
 import {conversationsRouter} from './routes/conversations.js';
 import {notificationsRouter} from './routes/notifications.js';
 import {discoveryRouter} from './routes/discovery.js';
+import {safetyRouter} from './routes/safety.js';
 
 export const app = express();
 
@@ -79,6 +80,7 @@ app.use('/api/v1', tourRequestsRouter);
 app.use('/api/v1', conversationsRouter);
 app.use('/api/v1', notificationsRouter);
 app.use('/api/v1', discoveryRouter);
+app.use('/api/v1', safetyRouter);
 app.use('/api/v1', healthRouter);
 
 app.use((_request, response) => {
