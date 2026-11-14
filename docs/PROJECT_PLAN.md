@@ -56,10 +56,14 @@ Listings are text-only until a private media storage provider is configured. Pub
 - Add moderation/report/block controls before broad discovery.
 - Acceptance: match state is consistent across devices and cannot be forged by changing browser storage.
 
-### 4. Messaging and tour requests
+### 4. Messaging and tour requests - in progress
 
-- Real conversation membership and persisted messages, unread state, pagination, and delivery/read semantics.
-- Tour request/accept/decline lifecycle and notifications; no automatic fabricated replies.
+- [x] Persist guest visit requests and let listing owners confirm or decline a requested window.
+- [x] Let guests track and cancel pending visit requests; reject conflicting accepted time windows.
+- [x] Create a private conversation only after a visit is confirmed, with membership limited to the guest and listing owner.
+- [x] Persist validated messages, paginate history, track unread/read state, and refresh active threads.
+- [x] Let either participant block the other; preserve message history and prevent new sends.
+- [ ] Notifications for request status changes; no automatic fabricated replies.
 - Acceptance: only conversation members can read/send; every tour status change is attributable and visible to both parties.
 
 ### 5. Maps and commute discovery
