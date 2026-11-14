@@ -69,6 +69,24 @@ export const requireSession: RequestHandler = asyncRoute(async (request, respons
   next();
 });
 
+export const optionalSession: RequestHandler = asyncRoute(async (request, response, next) => {
+  const token = readSessionToken(request);
+  if (!token || token.length > 128) {
+    next();
+    return;
+  }
+  const session = await prisma.session.findUnique({
+    where: {tokenHash: digest(token)},
+    select: {id: true, userId: true, expiresAt: true},
+  });
+  if (session && session.expiresAt > new Date()) {
+    response.locals.sessionUserId = session.userId;
+  } else if (session) {
+    await prisma.session.delete({where: {id: session.id}});
+  }
+  next();
+});
+
 export const authRouter = Router();
 
 authRouter.post('/auth/register', asyncRoute(async (request, response) => {

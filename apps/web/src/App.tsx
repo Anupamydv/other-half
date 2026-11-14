@@ -2,6 +2,7 @@ import React, {Suspense, lazy, useCallback, useEffect, useMemo, useState} from '
 import {
   Compass,
   Heart,
+  House,
   Map as MapIcon,
   MessageCircle,
   Plus,
@@ -40,6 +41,9 @@ const MessagesView = lazy(() =>
 );
 const ProfileQuizView = lazy(() =>
   import('./components/ProfileQuizView').then((module) => ({default: module.ProfileQuizView}))
+);
+const ListingsView = lazy(() =>
+  import('./components/ListingsView').then((module) => ({default: module.ListingsView}))
 );
 const CreatePostModal = lazy(() =>
   import('./components/CreatePostModal').then((module) => ({default: module.CreatePostModal}))
@@ -300,6 +304,7 @@ export default function App() {
             {(
               [
                 {id: 'explore', label: 'Explore'},
+                {id: 'listings', label: 'Homes'},
                 {id: 'map', label: 'Live Map'},
                 {id: 'matches', label: `Matches (${matchedIds.length})`},
                 {
@@ -337,11 +342,11 @@ export default function App() {
             <button type="button" onClick={() => void handleSignOut()} aria-label="Sign out" title="Sign out" className="mr-2 rounded-full p-2 text-[#64748B] hover:bg-[#F4F2EE] hover:text-[#1E293B]"><LogOut className="h-4 w-4" /></button>
             <button
               type="button"
-              onClick={() => setShowCreatePost(true)}
+              onClick={() => setActiveTab('listings')}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#F05A4A] text-white text-xs sm:text-sm font-bold hover:bg-[#df4d3d] shadow-sm transition-all active:scale-[0.98] whitespace-nowrap shrink-0"
             >
               <Plus className="w-4 h-4" />
-              <span>Post Flat / Reel</span>
+              <span>List a Home</span>
             </button>
           </div>
         </div>
@@ -349,14 +354,14 @@ export default function App() {
 
       <div className="mx-auto mt-3 max-w-[1240px] px-4 sm:px-6 lg:px-10">
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs leading-5 text-amber-900">
-          Preview content: listings, roommate cards, matches, and chats are sample data. Your account and profile edits are saved; live discovery features are coming in later milestones.
+          The Homes tab shows live listings saved through the API. Roommate cards, matches, and chats in the other tabs are sample content while those features are being built.
         </p>
       </div>
 
       {/* Main Content Canvas */}
       <main className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-10 pt-5 space-y-5">
         {/* City Theme Switcher & Explore Mode Toolbar (Explore & Map tabs) */}
-        {(activeTab === 'explore' || activeTab === 'map') && (
+        {(activeTab === 'explore' || activeTab === 'map' || activeTab === 'listings') && (
           <section className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               {/* Indian Metro City Switcher */}
@@ -515,6 +520,12 @@ export default function App() {
           </div>
         )}
 
+        {activeTab === 'listings' && (
+          <Suspense fallback={<div className="rounded-3xl bg-white p-8 text-center text-sm text-[#64748B]">Loading homes…</div>}>
+            <ListingsView cityId={selectedCity} neighborhood={selectedNeighborhood} userId={account.user.id} />
+          </Suspense>
+        )}
+
         {/* MATCHES TAB */}
         {activeTab === 'matches' && (
           <Suspense fallback={<div className="rounded-3xl bg-white p-8 text-center text-sm text-[#64748B]">Loading matches…</div>}>
@@ -569,11 +580,12 @@ export default function App() {
       {/* Mobile Floating Navigation Dock (< 15% Viewport Height) */}
       <nav
         aria-label="Mobile bottom navigation"
-        className="md:hidden fixed bottom-3 left-3 right-3 z-40 h-14 rounded-full bg-white/94 backdrop-blur-md border border-white/60 shadow-kinship-dock px-2 grid grid-cols-5 items-center"
+        className="md:hidden fixed bottom-3 left-3 right-3 z-40 h-14 rounded-full bg-white/94 backdrop-blur-md border border-white/60 shadow-kinship-dock px-2 grid grid-cols-6 items-center"
       >
         {(
           [
             {id: 'explore', label: 'Explore', icon: Compass},
+            {id: 'listings', label: 'Homes', icon: House},
             {id: 'map', label: 'Map', icon: MapIcon},
             {id: 'matches', label: 'Matches', icon: Heart},
             {id: 'messages', label: 'Chats', icon: MessageCircle},

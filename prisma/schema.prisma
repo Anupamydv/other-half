@@ -15,6 +15,8 @@ model User {
   updatedAt    DateTime  @updatedAt
   profile      Profile?
   sessions     Session[]
+  listings     Listing[]
+  savedListings SavedListing[]
 
   @@index([createdAt])
 }
@@ -46,9 +48,69 @@ model Session {
   @@index([expiresAt])
 }
 
+model Listing {
+  id             String          @id @default(cuid())
+  ownerId        String
+  title          String          @db.VarChar(120)
+  description    String          @db.VarChar(2000)
+  city           City
+  neighborhood   String          @db.VarChar(100)
+  listingType    ListingType
+  monthlyRent    Int
+  deposit        Int?
+  availableFrom  DateTime        @db.Date
+  minimumStay    Int             @default(6)
+  amenities      ListingAmenity[] @default([])
+  status         ListingStatus   @default(ACTIVE)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  archivedAt     DateTime?
+  owner          User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  savedBy        SavedListing[]
+
+  @@index([status, city, neighborhood, monthlyRent])
+  @@index([status, city, neighborhood, availableFrom])
+  @@index([amenities], type: Gin)
+  @@index([ownerId, status, createdAt])
+  @@index([createdAt])
+}
+
+model SavedListing {
+  userId    String
+  listingId String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@id([userId, listingId])
+  @@index([listingId])
+  @@index([userId, createdAt])
+}
+
 enum City {
   BENGALURU
   MUMBAI
   DELHI_NCR
   HYDERABAD
+}
+
+enum ListingType {
+  PRIVATE_ROOM
+  SHARED_ROOM
+  ENTIRE_FLAT
+}
+
+enum ListingAmenity {
+  FURNISHED
+  WIFI
+  AIR_CONDITIONING
+  LAUNDRY
+  PARKING
+  PET_FRIENDLY
+  VEGETARIAN_HOUSEHOLD
+}
+
+enum ListingStatus {
+  ACTIVE
+  ARCHIVED
 }

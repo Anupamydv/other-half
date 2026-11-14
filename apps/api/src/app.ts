@@ -8,6 +8,7 @@ import {logger} from './lib/logger.js';
 import {apiErrorHandler, HttpError} from './lib/http.js';
 import {authRouter} from './routes/auth.js';
 import {healthRouter} from './routes/health.js';
+import {listingsRouter} from './routes/listings.js';
 
 export const app = express();
 
@@ -69,6 +70,7 @@ app.get('/api/v1/health/live', (_request, response) => {
 });
 app.use('/api/v1/auth', authRateLimit);
 app.use('/api/v1', authRouter);
+app.use('/api/v1', listingsRouter);
 app.use('/api/v1', healthRouter);
 
 app.use((_request, response) => {
