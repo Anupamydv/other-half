@@ -14,6 +14,7 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   profile      Profile?
+  sessions     Session[]
 
   @@index([createdAt])
 }
@@ -22,12 +23,27 @@ model Profile {
   id           String   @id @default(cuid())
   userId       String   @unique
   displayName  String
+  age          Int?
+  role         String?
   city         City     @default(BENGALURU)
   neighborhood String?
   bio          String   @default("") @db.VarChar(500)
+  preferences  Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
 }
 
 enum City {

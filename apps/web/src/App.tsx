@@ -1,4 +1,4 @@
-import React, {Suspense, lazy, useEffect, useMemo, useState} from 'react';
+import React, {Suspense, lazy, useCallback, useEffect, useMemo, useState} from 'react';
 import {
   Compass,
   Heart,
@@ -6,11 +6,14 @@ import {
   MessageCircle,
   Plus,
   User,
+  LogOut,
 } from 'lucide-react';
 import {CityLandmarkStrip} from './components/CityLandmarkStrip';
 import {ApiStatus} from './components/ApiStatus';
+import {AuthScreen} from './components/AuthScreen';
 import {CITY_THEMES} from './data/indiaData';
 import {useOtherHalfState} from './hooks/useOtherHalfState';
+import {ApiRequestError, apiRequest, getCurrentAccount, type AccountResponse} from './services/api';
 import {
   AppTab,
   CityId,
@@ -80,6 +83,93 @@ export default function App() {
     updateUserPreferences,
     updateUserProfileDetails,
   } = useOtherHalfState();
+
+  const [account, setAccount] = useState<AccountResponse | null>(null);
+  const [sessionStatus, setSessionStatus] = useState<'loading' | 'authenticated' | 'anonymous' | 'unavailable'>('loading');
+  const [sessionMessage, setSessionMessage] = useState('');
+
+  const acceptAccount = useCallback((next: AccountResponse) => {
+    setAccount(next);
+    setSessionStatus('authenticated');
+    setSessionMessage('');
+    setSelectedCity(next.profile.cityId);
+    updateUserProfileDetails({
+      name: next.profile.displayName,
+      age: next.profile.age ?? 0,
+      role: next.profile.role ?? '',
+      cityId: next.profile.cityId,
+      neighborhood: next.profile.neighborhood ?? 'All Areas',
+      bio: next.profile.bio,
+    });
+    updateUserPreferences(next.profile.preferences);
+  }, [setSelectedCity, updateUserProfileDetails, updateUserPreferences]);
+
+  const loadSession = useCallback(async (signal?: AbortSignal) => {
+    setSessionStatus('loading');
+    try {
+      acceptAccount(await getCurrentAccount(signal));
+    } catch (error) {
+      if (signal?.aborted) return;
+      setAccount(null);
+      if (error instanceof ApiRequestError && error.status === 401) {
+        setSessionStatus('anonymous');
+        setSessionMessage('');
+      } else {
+        setSessionStatus('unavailable');
+        setSessionMessage(error instanceof Error ? error.message : 'Could not reach the account service.');
+      }
+    }
+  }, [acceptAccount]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadSession(controller.signal);
+    return () => controller.abort();
+  }, [loadSession]);
+
+  const handleSignOut = async () => {
+    try {
+      await apiRequest<void>('/auth/logout', {method: 'POST'});
+      setAccount(null);
+      setSessionStatus('anonymous');
+      setActiveTab('explore');
+    } catch (error) {
+      setSessionMessage(error instanceof Error ? error.message : 'Could not sign out. Please retry.');
+    }
+  };
+
+  const saveProfileDetails = async (updates: Partial<Omit<import('./types').UserSelfProfile, 'preferences'>>) => {
+    const payload = {
+      ...(updates.name !== undefined ? {displayName: updates.name} : {}),
+      ...(updates.role !== undefined ? {role: updates.role} : {}),
+      ...(updates.cityId !== undefined ? {cityId: updates.cityId} : {}),
+      ...(updates.neighborhood !== undefined ? {neighborhood: updates.neighborhood} : {}),
+      ...(updates.bio !== undefined ? {bio: updates.bio} : {}),
+    };
+    const result = await apiRequest<{profile: AccountResponse['profile']}>('/profile/me', {
+      method: 'PATCH', body: JSON.stringify(payload),
+    });
+    updateUserProfileDetails(updates);
+    if (account) setAccount({...account, profile: result.profile});
+  };
+
+  const savePreferences = async (preferences: AccountResponse['profile']['preferences']) => {
+    const result = await apiRequest<{profile: AccountResponse['profile']}>('/profile/me', {
+      method: 'PATCH', body: JSON.stringify({preferences}),
+    });
+    updateUserPreferences(result.profile.preferences);
+    if (account) setAccount({...account, profile: result.profile});
+  };
+
+  if (sessionStatus === 'loading') {
+    return <main className="min-h-screen flex items-center justify-center text-sm font-semibold text-[#64748B]">Connecting to your account…</main>;
+  }
+  if (sessionStatus === 'unavailable') {
+    return <main className="min-h-screen flex items-center justify-center px-4"><section className="max-w-md rounded-3xl bg-white p-7 text-center shadow-kinship-2"><h1 className="text-xl font-extrabold">Account service unavailable</h1><p className="mt-2 text-sm text-[#64748B]">{sessionMessage}</p><button onClick={() => void loadSession()} className="mt-5 rounded-xl bg-[#1E293B] px-5 py-3 text-sm font-bold text-white">Try again</button></section></main>;
+  }
+  if (!account || sessionStatus !== 'authenticated') {
+    return <AuthScreen onAuthenticated={acceptAccount} />;
+  }
 
   const [activeTab, setActiveTab] = useState<AppTab>('explore');
   const [exploreMode, setExploreMode] = useState<ExploreMode>('feed');
@@ -236,6 +326,8 @@ export default function App() {
           {/* Zone 3: Single Primary Action */}
           <div className="flex items-center shrink-0">
             <ApiStatus />
+            <span className="hidden lg:inline max-w-36 truncate px-3 text-xs font-semibold text-[#64748B]" title={account.user.email}>{account.user.email}</span>
+            <button type="button" onClick={() => void handleSignOut()} aria-label="Sign out" title="Sign out" className="mr-2 rounded-full p-2 text-[#64748B] hover:bg-[#F4F2EE] hover:text-[#1E293B]"><LogOut className="h-4 w-4" /></button>
             <button
               type="button"
               onClick={() => setShowCreatePost(true)}
@@ -247,6 +339,12 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      <div className="mx-auto mt-3 max-w-[1240px] px-4 sm:px-6 lg:px-10">
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs leading-5 text-amber-900">
+          Preview content: listings, roommate cards, matches, and chats are sample data. Your account and profile edits are saved; live discovery features are coming in later milestones.
+        </p>
+      </div>
 
       {/* Main Content Canvas */}
       <main className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-10 pt-5 space-y-5">
@@ -452,8 +550,8 @@ export default function App() {
           <Suspense fallback={<div className="rounded-3xl bg-white p-8 text-center text-sm text-[#64748B]">Loading your profile…</div>}>
             <ProfileQuizView
               userProfile={userProfile}
-              onUpdatePreferences={updateUserPreferences}
-              onUpdateDetails={updateUserProfileDetails}
+              onUpdatePreferences={savePreferences}
+              onUpdateDetails={saveProfileDetails}
               onResetSwipeDeck={resetSwipeDeck}
             />
           </Suspense>

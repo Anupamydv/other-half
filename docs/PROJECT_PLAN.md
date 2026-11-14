@@ -24,12 +24,16 @@ Help people moving within Bengaluru, Mumbai, Delhi NCR, and Hyderabad find compa
 - [ ] Install dependencies, create the first migration, and run the full project locally.
 - [ ] Add CI checks, error reporting, and deployment configuration.
 
-### 1. Identity and profile — next
+### 1. Identity and profile - in progress
 
-- Registration, email verification, login, logout, password recovery, and session revocation.
-- Secure HTTP-only cookie sessions, CSRF protection, rate limits, and credential abuse controls.
-- Persist profile details and lifestyle preferences; support edit, validation, and account deletion.
+- [x] Registration and login with server-side scrypt password hashes.
+- [x] Revocable seven-day sessions stored as SHA-256 token hashes and delivered in HTTP-only cookies.
+- [x] Same-site cookie policy, origin checks on write requests, and an initial per-process auth rate limit.
+- [x] Persist and validate editable profile details and lifestyle preferences.
+- [ ] Email verification, password recovery, account deletion, and production shared rate-limit storage.
 - Acceptance: a user can create an account, return in a new browser session, edit their profile, and access no other user's private data.
+
+The current identity slice implements registration, login/logout, session lookup, and profile/preference updates. Email verification and password recovery are deferred until an email provider and sender domain are configured. The in-memory rate limiter is suitable only for a single API process; deploy behind shared rate-limit storage before scaling to multiple replicas.
 
 ### 2. Housing listings and media
 

@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {CheckCircle2, RotateCcw, SlidersHorizontal, Sparkles} from 'lucide-react';
 import {CITY_THEMES} from '../data/indiaData';
 import {
@@ -14,8 +14,8 @@ import {
 
 interface ProfileQuizViewProps {
   userProfile: UserSelfProfile;
-  onUpdatePreferences: (prefs: LifestylePreferences) => void;
-  onUpdateDetails: (updates: Partial<Omit<UserSelfProfile, 'preferences'>>) => void;
+  onUpdatePreferences: (prefs: LifestylePreferences) => void | Promise<void>;
+  onUpdateDetails: (updates: Partial<Omit<UserSelfProfile, 'preferences'>>) => void | Promise<void>;
   onResetSwipeDeck: () => void;
 }
 
@@ -26,13 +26,36 @@ export const ProfileQuizView: React.FC<ProfileQuizViewProps> = ({
   onResetSwipeDeck,
 }) => {
   const [prefs, setPrefs] = useState<LifestylePreferences>(userProfile.preferences);
+  const [details, setDetails] = useState(userProfile);
   const [savedNotice, setSavedNotice] = useState(false);
+  const [errorNotice, setErrorNotice] = useState('');
 
-  const handleSaveQuiz = (next: LifestylePreferences) => {
-    setPrefs(next);
-    onUpdatePreferences(next);
-    setSavedNotice(true);
-    setTimeout(() => setSavedNotice(false), 1800);
+  useEffect(() => {
+    setPrefs(userProfile.preferences);
+    setDetails(userProfile);
+  }, [userProfile]);
+
+  const handleSaveQuiz = async (next: LifestylePreferences) => {
+    setErrorNotice('');
+    try {
+      await onUpdatePreferences(next);
+      setPrefs(next);
+      setSavedNotice(true);
+      setTimeout(() => setSavedNotice(false), 1800);
+    } catch (error) {
+      setErrorNotice(error instanceof Error ? error.message : 'Could not save your answers.');
+    }
+  };
+
+  const handleSaveDetails = async () => {
+    setErrorNotice('');
+    try {
+      await onUpdateDetails({name: details.name, role: details.role, cityId: details.cityId, bio: details.bio});
+      setSavedNotice(true);
+      setTimeout(() => setSavedNotice(false), 1800);
+    } catch (error) {
+      setErrorNotice(error instanceof Error ? error.message : 'Could not save your profile.');
+    }
   };
 
   return (
@@ -43,12 +66,12 @@ export const ProfileQuizView: React.FC<ProfileQuizViewProps> = ({
           <div>
             <h2 className="text-lg font-extrabold text-[#1E293B]">Your Profile</h2>
             <p className="text-xs text-[#64748B]">
-              Visible to matched flatmates across Indian metros
+              Saved to your account. Public discovery is not active yet.
             </p>
           </div>
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#10B981]/12 text-[#006947] text-xs font-bold">
             <CheckCircle2 className="w-3.5 h-3.5" />
-            Verified
+            Account active
           </span>
         </div>
 
@@ -59,8 +82,8 @@ export const ProfileQuizView: React.FC<ProfileQuizViewProps> = ({
             </label>
             <input
               type="text"
-              value={userProfile.name}
-              onChange={(e) => onUpdateDetails({name: e.target.value})}
+              value={details.name}
+              onChange={(e) => setDetails((prev) => ({...prev, name: e.target.value}))}
               className="w-full h-11 px-4 rounded-xl bg-[#F4F2EE] text-sm font-semibold text-[#1E293B] focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#F05A4A]/40"
             />
           </div>
@@ -72,8 +95,8 @@ export const ProfileQuizView: React.FC<ProfileQuizViewProps> = ({
               </label>
               <input
                 type="text"
-                value={userProfile.role}
-                onChange={(e) => onUpdateDetails({role: e.target.value})}
+                value={details.role}
+                onChange={(e) => setDetails((prev) => ({...prev, role: e.target.value}))}
                 className="w-full h-11 px-4 rounded-xl bg-[#F4F2EE] text-xs font-semibold text-[#1E293B] focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#F05A4A]/40"
               />
             </div>
@@ -82,8 +105,8 @@ export const ProfileQuizView: React.FC<ProfileQuizViewProps> = ({
                 Home City
               </label>
               <select
-                value={userProfile.cityId}
-                onChange={(e) => onUpdateDetails({cityId: e.target.value as CityId})}
+                value={details.cityId}
+                onChange={(e) => setDetails((prev) => ({...prev, cityId: e.target.value as CityId}))}
                 className="w-full h-11 px-3 rounded-xl bg-[#F4F2EE] text-xs font-semibold text-[#1E293B] focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#F05A4A]/40"
               >
                 {Object.values(CITY_THEMES).map((c) => (
@@ -101,12 +124,14 @@ export const ProfileQuizView: React.FC<ProfileQuizViewProps> = ({
             </label>
             <textarea
               rows={3}
-              value={userProfile.bio}
-              onChange={(e) => onUpdateDetails({bio: e.target.value})}
+              value={details.bio}
+              onChange={(e) => setDetails((prev) => ({...prev, bio: e.target.value}))}
               className="w-full p-3.5 rounded-2xl bg-[#F4F2EE] text-xs text-[#1E293B] leading-relaxed focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#F05A4A]/40"
             />
           </div>
         </div>
+
+        <button type="button" onClick={() => void handleSaveDetails()} className="w-full rounded-xl bg-[#1E293B] px-4 py-3 text-sm font-bold text-white hover:bg-[#334155]">Save profile</button>
 
         <div className="pt-2 border-t border-slate-900/5 flex items-center justify-between gap-3">
           <span className="text-xs text-[#64748B]">Want to revisit passed cards?</span>
@@ -123,6 +148,7 @@ export const ProfileQuizView: React.FC<ProfileQuizViewProps> = ({
 
       {/* Right: Interactive 6-Axis Lifestyle Compatibility Quiz */}
       <div className="lg:col-span-7 bg-white rounded-[28px] p-5 sm:p-6 shadow-kinship-1 border border-slate-900/5 space-y-5">
+        {errorNotice && <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{errorNotice}</p>}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-lg font-extrabold text-[#1E293B] flex items-center gap-2">
@@ -130,13 +156,13 @@ export const ProfileQuizView: React.FC<ProfileQuizViewProps> = ({
               <span>Lifestyle Compatibility Quiz</span>
             </h2>
             <p className="text-xs text-[#64748B] mt-0.5">
-              Changes instantly recalculate % compatibility scores across every card and post.
+              Your answers are saved to your account. Compatibility scores are preview-only.
             </p>
           </div>
           {savedNotice && (
             <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#10B981]/12 text-[#006947] text-xs font-bold">
               <Sparkles className="w-3.5 h-3.5" />
-              Scores Updated
+              Answers Saved
             </span>
           )}
         </div>
