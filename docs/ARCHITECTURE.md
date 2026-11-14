@@ -36,6 +36,7 @@ We are starting with a modular monolith. Housing discovery, profiles, matching, 
 - Every endpoint that changes data will validate input, authenticate the caller, authorize the target resource, and use database constraints/transactions where needed.
 - Members can download an authenticated JSON export of their profile and account activity. Password hashes, session tokens, and unrelated members’ private profiles are excluded; exported listing-photo links are temporary.
 - Migrations, secrets, backups, structured logs, rate limits, monitoring, and deployment automation are required before public launch.
+- GitHub Actions runs locked dependency installation, workspace typechecking, production builds, and Prisma schema validation on pull requests and pushes to `main`.
 
 ## Repository layout
 

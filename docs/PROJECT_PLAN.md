@@ -22,7 +22,8 @@ Help people moving within Bengaluru, Mumbai, Delhi NCR, and Hyderabad find compa
 - [x] Add a local Postgres container and environment template.
 - [x] Connect the web shell to API readiness and show service state.
 - [ ] Install dependencies, create the first migration, and run the full project locally.
-- [ ] Add CI checks, error reporting, and deployment configuration.
+- [x] Add pull request CI for workspace typechecking, production builds, and Prisma schema validation.
+- [ ] Add error reporting and deployment configuration.
 
 ### 1. Identity and profile - in progress
 
