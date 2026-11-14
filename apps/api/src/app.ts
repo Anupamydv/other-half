@@ -1,11 +1,12 @@
 import cors from 'cors';
-import express, {type ErrorRequestHandler, type RequestHandler} from 'express';
+import express, {type ErrorRequestHandler} from 'express';
 import helmet from 'helmet';
 import {randomUUID} from 'node:crypto';
 import {pinoHttp} from 'pino-http';
 import {env} from './config/env.js';
 import {logger} from './lib/logger.js';
 import {apiErrorHandler, HttpError} from './lib/http.js';
+import {authRateLimit} from './lib/rateLimit.js';
 import {authRouter} from './routes/auth.js';
 import {healthRouter} from './routes/health.js';
 import {listingsRouter} from './routes/listings.js';
@@ -21,6 +22,7 @@ import {communityRouter} from './routes/community.js';
 export const app = express();
 
 app.disable('x-powered-by');
+if (env.TRUST_PROXY_HOPS > 0) app.set('trust proxy', env.TRUST_PROXY_HOPS);
 app.use(helmet());
 app.use(
   cors({
@@ -29,31 +31,6 @@ app.use(
   }),
 );
 app.use(express.json({limit: '1mb'}));
-const AUTH_WINDOW_MS = 15 * 60 * 1000;
-const AUTH_REQUEST_LIMIT = 12;
-const authAttempts = new Map<string, {count: number; resetAt: number}>();
-const authRateLimit: RequestHandler = (request, response, next) => {
-  const now = Date.now();
-  const key = request.ip ?? 'unknown';
-  let bucket = authAttempts.get(key);
-  if (!bucket || bucket.resetAt <= now) {
-    bucket = {count: 0, resetAt: now + AUTH_WINDOW_MS};
-    authAttempts.set(key, bucket);
-  }
-  if (authAttempts.size > 10_000) {
-    for (const [ip, item] of authAttempts) if (item.resetAt <= now) authAttempts.delete(ip);
-  }
-  bucket.count += 1;
-  response.setHeader('RateLimit-Limit', AUTH_REQUEST_LIMIT);
-  response.setHeader('RateLimit-Remaining', Math.max(0, AUTH_REQUEST_LIMIT - bucket.count));
-  if (bucket.count > AUTH_REQUEST_LIMIT) {
-    response.setHeader('RateLimit-Reset', Math.ceil((bucket.resetAt - now) / 1000));
-    response.status(429).json({error: {code: 'RATE_LIMITED', message: 'Too many account requests. Try again later.'}});
-    return;
-  }
-  next();
-};
-
 app.use(
   pinoHttp({
     logger,

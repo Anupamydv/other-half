@@ -30,14 +30,16 @@ Help people moving within Bengaluru, Mumbai, Delhi NCR, and Hyderabad find compa
 
 - [x] Registration and login with server-side scrypt password hashes.
 - [x] Revocable seven-day sessions stored as SHA-256 token hashes and delivered in HTTP-only cookies.
-- [x] Same-site cookie policy, origin checks on write requests, and an initial per-process auth rate limit.
+- [x] Same-site cookie policy, origin checks on write requests, and shared Redis-backed rate limits for auth and account operations.
 - [x] Persist and validate editable profile details and lifestyle preferences.
 - [x] Edit age and neighborhood; change password and revoke other active sessions.
-- [ ] Email verification, password recovery, and production shared rate-limit storage.
+- [ ] Email verification and password recovery.
 - [x] Permanently delete an account and its product data after current-password verification and explicit confirmation; remove associated private listing photos and revoke its sessions through cascading deletion.
 - Acceptance: a user can create an account, return in a new browser session, edit their profile, and access no other user's private data.
 
-The current identity slice implements registration, login/logout, session lookup, and profile/preference updates. Email verification and password recovery are deferred until an email provider and sender domain are configured. The in-memory rate limiter is suitable only for a single API process; deploy behind shared rate-limit storage before scaling to multiple replicas.
+The current identity slice implements registration, login/logout, session lookup, and profile/preference updates. Email verification and password recovery are deferred until an email provider and sender domain are configured.
+
+Authentication and account operations use an atomic Redis fixed-window limit of 12 requests per IP per 15 minutes. The key stores a SHA-256 digest of the client IP rather than the raw address. Local development may fall back to per-process limits if Redis is unavailable; production requires `REDIS_URL`, fails startup when Redis cannot be reached, and returns not-ready/fails closed if Redis becomes unavailable. Configure `TRUST_PROXY_HOPS` to the exact trusted proxy depth so Express derives the correct client IP.
 
 ### 2. Housing listings and media - in progress
 

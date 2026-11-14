@@ -9,6 +9,7 @@ Browser (React/Vite)
 Express API ───── PostgreSQL (Prisma)
         │
         ├──── Object storage for user media
+        ├──── Redis for atomic shared auth/account rate limits
         ├──── Email provider for verification and recovery
         └──── Google Maps browser SDK (restricted public key)
 ```
@@ -35,7 +36,7 @@ We are starting with a modular monolith. Housing discovery, profiles, matching, 
 - Production sessions will use secure, HTTP-only, same-site cookies and server-side revocation. Passwords will use a deliberately slow password hash; raw credentials never enter logs.
 - Every endpoint that changes data will validate input, authenticate the caller, authorize the target resource, and use database constraints/transactions where needed.
 - Members can download an authenticated JSON export of their profile and account activity. Password hashes, session tokens, and unrelated members’ private profiles are excluded; exported listing-photo links are temporary.
-- Migrations, secrets, backups, structured logs, rate limits, monitoring, and deployment automation are required before public launch.
+- Migrations, secrets, backups, structured logs, shared Redis rate limits, monitoring, and deployment automation are required before public launch. Production startup requires Redis; local development can use an explicitly degraded process-local fallback.
 - GitHub Actions runs locked dependency installation, workspace typechecking, production builds, and Prisma schema validation on pull requests and pushes to `main`.
 - The shared contracts package is compiled before workspace builds, and the API build packages its generated Prisma Client into `dist`; runtime containers must run the compiled API with production environment variables rather than the development TypeScript loader.
 

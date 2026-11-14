@@ -1,4 +1,17 @@
 services:
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - other-half-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
   db:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -52,5 +65,6 @@ services:
       - ./minio-cors.xml:/etc/minio/cors.xml:ro
 
 volumes:
+  other-half-redis:
   other-half-postgres:
   other-half-minio:

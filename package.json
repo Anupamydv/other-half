@@ -17,7 +17,7 @@
     "dev:web": "npm run build --workspace=@other-half/contracts && npm run dev --workspace=@other-half/web",
     "db:up": "docker compose -f infra/compose.yaml up -d db",
     "db:down": "docker compose -f infra/compose.yaml down",
-    "infra:up": "docker compose -f infra/compose.yaml up -d db minio minio-init",
+    "infra:up": "docker compose -f infra/compose.yaml up -d redis db minio minio-init",
     "db:generate": "npm run db:generate --workspace=@other-half/api",
     "db:migrate": "npm run db:migrate --workspace=@other-half/api",
     "db:deploy": "prisma migrate deploy --config=prisma.config.ts",
