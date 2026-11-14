@@ -89,3 +89,13 @@ Discovery is account-backed and city-scoped. Profiles are hidden until the membe
 ## Current scope
 
 The supplied ZIP is treated as a visual/product idea. Its seeded profiles, localStorage data store, simulated chat replies, and generated build output are not production behavior and will be replaced as the corresponding backend milestones are implemented. Existing React screens and licensed/project-provided assets remain available as a presentation reference during the transition.
+
+### 7. City community updates
+
+- [x] Persist city and neighborhood-scoped text updates with bounded content, tags, and cursor pagination.
+- [x] Persist likes, saved updates, and comments; show saved updates and comment history from the API.
+- [x] Hide posts from blocked members and provide report/block actions plus owner deletion.
+- [ ] Add private image/video attachments using object storage and asynchronous media processing.
+- Acceptance: posts and interactions are consistent across devices; anonymous users cannot read or write the community feed.
+
+Community updates are text-only. Housing photos and verified rent belong in the housing listing flow until community attachments can use the same private media controls and moderation pipeline.

@@ -149,6 +149,38 @@ export const listingMediaUploadSchema = z.object({
 });
 export const listingMediaUploadResponseSchema = z.object({mediaId: z.string(), uploadUrl: z.url(), expiresInSeconds: z.number().int().positive()});
 
+export const communityPostTypeSchema = z.enum(['ROOM_AVAILABLE', 'LOOKING_FOR_FLATMATE', 'GENERAL']);
+export const communityPostCreateSchema = z.object({
+  cityId: cityIdSchema,
+  neighborhood: z.string().trim().min(2).max(100),
+  postType: communityPostTypeSchema,
+  caption: z.string().trim().min(10).max(2000),
+  rentPerMonth: z.number().int().min(1000).max(2_000_000).nullable().default(null),
+  flatTitle: z.string().trim().min(3).max(120).nullable().default(null),
+  tags: z.array(z.string().trim().min(1).max(30)).max(4).default([]),
+});
+export const communityPostQuerySchema = z.object({
+  cityId: cityIdSchema,
+  neighborhood: z.string().trim().min(2).max(100).optional(),
+  savedOnly: z.enum(['true', 'false']).transform((value) => value === 'true').default(false),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  cursor: z.string().min(1).max(64).optional(),
+});
+export const communityPostDtoSchema = z.object({
+  id: z.string(), authorId: z.string(), authorDisplayName: z.string(), cityId: cityIdSchema,
+  neighborhood: z.string(), postType: communityPostTypeSchema, caption: z.string(),
+  rentPerMonth: z.number().int().nullable(), flatTitle: z.string().nullable(), tags: z.array(z.string()),
+  likeCount: z.number().int().nonnegative(), commentCount: z.number().int().nonnegative(),
+  likedByMe: z.boolean(), savedByMe: z.boolean(), createdAt: z.iso.datetime(),
+  comments: z.array(z.object({id: z.string(), authorId: z.string(), authorDisplayName: z.string(), body: z.string(), createdAt: z.iso.datetime()})),
+});
+export const communityPostPageSchema = z.object({items: z.array(communityPostDtoSchema), nextCursor: z.string().nullable()});
+export const communityCommentCreateSchema = z.object({body: z.string().trim().min(1).max(1000)});
+export const communityCommentQuerySchema = z.object({limit: z.coerce.number().int().min(1).max(50).default(20), cursor: z.string().min(1).max(64).optional()});
+export type CommunityPostInput = z.infer<typeof communityPostCreateSchema>;
+export type CommunityPostDto = z.infer<typeof communityPostDtoSchema>;
+export type CommunityPostType = z.infer<typeof communityPostTypeSchema>;
+
 export const tourTimeSlotSchema = z.enum(['MORNING', 'AFTERNOON', 'EVENING']);
 export const tourRequestStatusSchema = z.enum(['PENDING', 'CONFIRMED', 'DECLINED', 'CANCELLED']);
 export type TourTimeSlot = z.infer<typeof tourTimeSlotSchema>;

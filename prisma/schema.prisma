@@ -33,6 +33,10 @@ model User {
   reportsReceived UserReport[] @relation("ReportSubject")
   reportsReviewed UserReport[] @relation("ReportReviewer")
   mediaUploads ListingMedia[]
+  communityPosts CommunityPost[]
+  communityPostLikes CommunityPostLike[]
+  communityPostSaves CommunityPostSave[]
+  communityPostComments CommunityPostComment[]
 
   @@index([createdAt])
 }
@@ -330,4 +334,72 @@ enum UserReportStatus {
 enum ListingMediaStatus {
   PENDING
   READY
+}
+
+model CommunityPost {
+  id           String            @id @default(cuid())
+  authorId     String
+  city         City
+  neighborhood String            @db.VarChar(100)
+  postType     CommunityPostType
+  caption      String            @db.VarChar(2000)
+  rentPerMonth Int?
+  flatTitle    String?           @db.VarChar(120)
+  tags         String[]          @default([])
+  status       CommunityPostStatus @default(ACTIVE)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  author       User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  likes        CommunityPostLike[]
+  saves        CommunityPostSave[]
+  comments     CommunityPostComment[]
+
+  @@index([city, neighborhood, status, createdAt])
+  @@index([authorId, status, createdAt])
+}
+
+model CommunityPostLike {
+  postId    String
+  userId    String
+  createdAt DateTime      @default(now())
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+  @@index([userId, createdAt])
+}
+
+model CommunityPostSave {
+  postId    String
+  userId    String
+  createdAt DateTime      @default(now())
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+  @@index([userId, createdAt])
+}
+
+model CommunityPostComment {
+  id        String        @id @default(cuid())
+  postId    String
+  authorId  String
+  body      String        @db.VarChar(1000)
+  createdAt DateTime      @default(now())
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@index([authorId, createdAt])
+}
+
+enum CommunityPostType {
+  ROOM_AVAILABLE
+  LOOKING_FOR_FLATMATE
+  GENERAL
+}
+
+enum CommunityPostStatus {
+  ACTIVE
+  REMOVED
 }

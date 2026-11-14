@@ -21,7 +21,6 @@ import {
   AppTab,
   CityId,
   ExploreMode,
-  FeedPost,
   LandmarkPlace,
   RoommateProfile,
 } from './types';
@@ -56,9 +55,6 @@ const ListingsView = lazy(() =>
 const ToursView = lazy(() =>
   import('./components/ToursView').then((module) => ({default: module.ToursView}))
 );
-const CreatePostModal = lazy(() =>
-  import('./components/CreatePostModal').then((module) => ({default: module.CreatePostModal}))
-);
 const DetailAndTourModal = lazy(() =>
   import('./components/DetailAndTourModal').then((module) => ({default: module.DetailAndTourModal}))
 );
@@ -70,13 +66,8 @@ export default function App() {
     currentCityTheme,
     userProfile,
     profiles,
-    feedPosts,
     setSelectedCity,
     setSelectedNeighborhood,
-    toggleLikePost,
-    toggleSavePost,
-    addCommentToPost,
-    createFeedPost,
     bookHouseTour,
     updateUserPreferences,
     updateUserProfileDetails,
@@ -179,7 +170,6 @@ export default function App() {
   const [selectedFlatId, setSelectedFlatId] = useState<string | null>(null);
   const [focusedLandmark, setFocusedLandmark] = useState<LandmarkPlace | null>(null);
   const [detailProfile, setDetailProfile] = useState<RoommateProfile | null>(null);
-  const [showCreatePost, setShowCreatePost] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [interactionNotice, setInteractionNotice] = useState('');
   // Filtered city flats/profiles
@@ -207,35 +197,10 @@ export default function App() {
     setFocusedLandmark(null);
   }, [cityProfiles, selectedFlatId]);
 
-  const cityPosts = useMemo(() => {
-    return feedPosts.filter((post) => {
-      if (post.cityId !== selectedCity) return false;
-      if (
-        selectedNeighborhood !== 'All Areas' &&
-        post.neighborhood !== selectedNeighborhood
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [feedPosts, selectedCity, selectedNeighborhood]);
-
   const handleNavigateToProfile = (profile: RoommateProfile) => {
     setSelectedCity(profile.cityId);
     setSelectedNeighborhood('All Areas');
     setSelectedFlatId(profile.id);
-    setFocusedLandmark(null);
-    if (window.innerWidth < 1024 || activeTab !== 'explore') {
-      setActiveTab('map');
-    }
-  };
-
-  const handleNavigateToPost = (post: FeedPost) => {
-    setSelectedCity(post.cityId);
-    setSelectedNeighborhood('All Areas');
-    if (post.linkedProfileId) {
-      setSelectedFlatId(post.linkedProfileId);
-    }
     setFocusedLandmark(null);
     if (window.innerWidth < 1024 || activeTab !== 'explore') {
       setActiveTab('map');
@@ -433,18 +398,10 @@ export default function App() {
                 {exploreMode === 'feed' ? (
                   <Suspense fallback={<div className="rounded-3xl bg-white p-8 text-center text-sm text-[#64748B]">Loading community feed…</div>}>
                     <FeedView
-                      posts={cityPosts}
                       city={currentCityTheme}
-                      profiles={profiles}
-                      matchedIds={[]}
-                      userPrefs={userProfile.preferences}
-                      onToggleLike={toggleLikePost}
-                      onToggleSave={toggleSavePost}
-                      onAddComment={addCommentToPost}
-                      onNavigateToFlat={handleNavigateToPost}
-                      onOpenDetail={(prof) => setDetailProfile(prof)}
-                      onQuickMatch={() => setInteractionNotice('People mentioned in community posts are example profiles. Use Find Roommates to discover real members.')}
-                      onOpenCreatePost={() => setShowCreatePost(true)}
+                      cityId={selectedCity}
+                      neighborhood={selectedNeighborhood}
+                      userId={account.user.id}
                     />
                   </Suspense>
                 ) : (
@@ -573,21 +530,6 @@ export default function App() {
           );
         })}
       </nav>
-
-      {/* Create Post Modal */}
-      {showCreatePost && (
-        <Suspense fallback={null}>
-          <CreatePostModal
-            defaultCity={selectedCity}
-            onClose={() => setShowCreatePost(false)}
-            onPublish={async (input) => {
-              await createFeedPost(input);
-              setActiveTab('explore');
-              setExploreMode('feed');
-            }}
-          />
-        </Suspense>
-      )}
 
       {/* Roommate / Flat Detail, Split Rent & Tour Booking Modal */}
       {detailProfile && (

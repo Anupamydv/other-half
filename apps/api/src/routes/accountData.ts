@@ -14,7 +14,7 @@ accountDataRouter.get('/account/export', requireSession, asyncRoute(async (_requ
   });
   if (!user) throw new HttpError(404, 'ACCOUNT_NOT_FOUND', 'Account not found.');
 
-  const [listings, savedListings, tourRequests, conversations, actions, matches, blocks, reports, notifications] = await Promise.all([
+  const [listings, savedListings, tourRequests, conversations, actions, matches, blocks, reports, notifications, communityPosts, communityComments, communityLikes, communitySaves] = await Promise.all([
     prisma.listing.findMany({where: {ownerId: userId}, orderBy: {createdAt: 'asc'}, include: {media: {where: {status: 'READY'}, orderBy: [{sortOrder: 'asc'}, {createdAt: 'asc'}]}}}),
     prisma.savedListing.findMany({where: {userId}, orderBy: {createdAt: 'asc'}, include: {listing: {select: {id: true, title: true, city: true, neighborhood: true, monthlyRent: true, status: true}}}}),
     prisma.tourRequest.findMany({where: {OR: [{requesterId: userId}, {listing: {ownerId: userId}}]}, orderBy: {createdAt: 'asc'}, include: {listing: {select: {id: true, title: true, ownerId: true}}, notifications: {where: {userId}, select: {id: true, type: true, title: true, body: true, createdAt: true, readAt: true}}}}),
@@ -24,6 +24,10 @@ accountDataRouter.get('/account/export', requireSession, asyncRoute(async (_requ
     prisma.userBlock.findMany({where: {blockerId: userId}, orderBy: {createdAt: 'asc'}, select: {blockedId: true, createdAt: true}}),
     prisma.userReport.findMany({where: {reporterId: userId}, orderBy: {createdAt: 'asc'}, select: {id: true, reportedUserId: true, reason: true, details: true, status: true, createdAt: true, updatedAt: true, reviewedAt: true}}),
     prisma.notification.findMany({where: {userId}, orderBy: {createdAt: 'asc'}, select: {id: true, type: true, title: true, body: true, createdAt: true, readAt: true, tourRequestId: true}}),
+    prisma.communityPost.findMany({where: {authorId: userId}, orderBy: {createdAt: 'asc'}}),
+    prisma.communityPostComment.findMany({where: {authorId: userId}, orderBy: {createdAt: 'asc'}, select: {id: true, postId: true, body: true, createdAt: true}}),
+    prisma.communityPostLike.findMany({where: {userId}, orderBy: {createdAt: 'asc'}, select: {postId: true, createdAt: true}}),
+    prisma.communityPostSave.findMany({where: {userId}, orderBy: {createdAt: 'asc'}, select: {postId: true, createdAt: true}}),
   ]);
 
   const exportListings = await Promise.all(listings.map(async (listing) => ({
@@ -51,6 +55,10 @@ accountDataRouter.get('/account/export', requireSession, asyncRoute(async (_requ
     blocks,
     reportsSubmitted: reports,
     notifications,
+    communityPosts,
+    communityComments,
+    communityLikes,
+    communitySaves,
     notes: [
       'Authentication secrets, password hashes, session tokens, and other members’ private profile data are excluded.',
       'Listing photo URLs, when included, expire after 15 minutes. Download those files before the links expire.',
