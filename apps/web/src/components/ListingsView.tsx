@@ -10,6 +10,7 @@ import {
 import {CITY_THEMES} from '../data/indiaData';
 import {archiveListing, createListing, deleteListingPhoto, getListings, getMyListings, getSavedListings, saveListing, unsaveListing, updateListing, uploadListingPhoto} from '../services/listings';
 import {TourRequestForm} from './TourRequestForm';
+import {ApproximateMapPicker} from './ApproximateMapPicker';
 import type {CityId} from '../types';
 
 interface ListingsViewProps {
@@ -270,6 +271,7 @@ function ListingCard({listing, isOwner, showSave, showRequest, saving, onEdit, o
     </div>
     <h2 className="mt-3 text-lg font-extrabold leading-snug text-[#1E293B]">{listing.title}</h2>
     <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-[#64748B]"><MapPin className="h-3.5 w-3.5" />{listing.neighborhood}, {city.name}</p>
+    {listing.approximateLocation && <a href={`https://www.google.com/maps/search/?api=1&query=${listing.approximateLocation.latitude},${listing.approximateLocation.longitude}`} target="_blank" rel="noreferrer" className="mt-2 inline-flex w-fit items-center gap-1 rounded-full bg-[#F4F2EE] px-3 py-1.5 text-[11px] font-bold text-[#475569] hover:bg-[#EAE6DF]"><MapPin className="h-3.5 w-3.5" /> Approximate area map</a>}
     <p className="mt-4 text-2xl font-extrabold text-[#1E293B]">{rent}<span className="ml-1 text-xs font-semibold text-[#64748B]">/ month</span></p>
     <p className="mt-3 line-clamp-4 flex-1 whitespace-pre-wrap text-sm leading-6 text-[#475569]">{listing.description}</p>
     <div className="mt-4 flex flex-wrap gap-1.5">
@@ -294,6 +296,7 @@ function ListingForm({cityId, listing, onCancel, onSaved}: {
   const [title, setTitle] = useState(listing?.title ?? '');
   const [description, setDescription] = useState(listing?.description ?? '');
   const [city, setCity] = useState<CityId>(listing?.cityId ?? cityId);
+  const [approximateLocation, setApproximateLocation] = useState(listing?.approximateLocation ?? null);
   const [neighborhood, setNeighborhood] = useState(listing?.neighborhood ?? '');
   const [listingType, setListingType] = useState<ListingType>(listing?.listingType ?? 'PRIVATE_ROOM');
   const [monthlyRent, setMonthlyRent] = useState(listing?.monthlyRent ? String(listing.monthlyRent) : '');
@@ -320,7 +323,7 @@ function ListingForm({cityId, listing, onCancel, onSaved}: {
     const result = listingCreateSchema.safeParse({
       title, description, cityId: city, neighborhood, listingType,
       monthlyRent: Number(monthlyRent), deposit: deposit === '' ? null : Number(deposit),
-      availableFrom, minimumStay: Number(minimumStay), amenities,
+      availableFrom, minimumStay: Number(minimumStay), amenities, approximateLocation,
     });
     if (!result.success) {
       setError(result.error.issues[0]?.message ?? 'Review the listing details.');
@@ -392,7 +395,7 @@ function ListingForm({cityId, listing, onCancel, onSaved}: {
       <label className={labelClass}>Listing title<input required minLength={6} maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} placeholder="Sunny private room near Indiranagar Metro" /></label>
       <label className={labelClass}>Description<textarea required minLength={30} maxLength={2000} rows={5} value={description} onChange={(e) => setDescription(e.target.value)} className="mt-1.5 w-full rounded-xl bg-[#F4F2EE] p-3.5 text-sm leading-6 text-[#1E293B] outline-none focus:ring-2 focus:ring-[#F05A4A]/40" placeholder="Describe the room, household, and what rent includes." /><span className="mt-1 block text-right text-[11px] font-medium text-[#64748B]">{description.length}/2000</span></label>
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className={labelClass}>City<select value={city} onChange={(e) => setCity(e.target.value as CityId)} className={inputClass}>{Object.values(CITY_THEMES).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label className={labelClass}>City<select value={city} onChange={(e) => {setCity(e.target.value as CityId); setApproximateLocation(null);}} className={inputClass}>{Object.values(CITY_THEMES).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label className={labelClass}>Neighborhood<input required minLength={2} maxLength={100} value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} className={inputClass} placeholder="e.g. HSR Layout" /></label>
         <label className={labelClass}>Home type<select value={listingType} onChange={(e) => setListingType(e.target.value as ListingType)} className={inputClass}>{Object.entries(TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label className={labelClass}>Monthly rent (₹)<input required type="number" min={1000} max={2000000} step={500} value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} className={inputClass} placeholder="18000" /></label>
@@ -400,6 +403,7 @@ function ListingForm({cityId, listing, onCancel, onSaved}: {
         <label className={labelClass}>Available from<input required type="date" min={new Date().toISOString().slice(0, 10)} value={availableFrom} onChange={(e) => setAvailableFrom(e.target.value)} className={inputClass} /></label>
         <label className={labelClass}>Minimum stay<select value={minimumStay} onChange={(e) => setMinimumStay(e.target.value)} className={inputClass}>{[1, 3, 6, 9, 12, 18, 24, 36].map((months) => <option key={months} value={months}>{months} months</option>)}</select></label>
       </div>
+      <ApproximateMapPicker key={city} cityId={city} value={approximateLocation} onChange={setApproximateLocation} />
       <fieldset>
         <legend className={labelClass}>Amenities and household expectations</legend>
         <div className="mt-2 grid gap-2 sm:grid-cols-2">

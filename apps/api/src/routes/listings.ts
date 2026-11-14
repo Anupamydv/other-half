@@ -141,6 +141,7 @@ listingsRouter.get('/listings/:id', optionalSession, asyncRoute(async (request, 
 listingsRouter.post('/listings', requireSession, asyncRoute(async (request, response) => {
   const parsed = listingCreateSchema.safeParse(request.body);
   if (!parsed.success) throw new HttpError(400, 'VALIDATION_ERROR', parsed.error.issues[0]?.message ?? 'Invalid listing details.');
+  assertLocationWithinCity(parsed.data.cityId, parsed.data.approximateLocation);
   const listing = await prisma.listing.create({
     data: toCreateData(parsed.data, response.locals.sessionUserId as string),
     include: listingInclude,
@@ -156,6 +157,7 @@ listingsRouter.patch('/listings/:id', requireSession, asyncRoute(async (request,
   const existing = await prisma.listing.findFirst({where: {id, ownerId}});
   if (!existing) throw new HttpError(404, 'LISTING_NOT_FOUND', 'Listing not found.');
   if (existing.status !== 'ACTIVE') throw new HttpError(409, 'LISTING_ARCHIVED', 'Archived listings cannot be edited.');
+  assertLocationWithinCity(parsed.data.cityId ?? cityFromDb[existing.city], parsed.data.approximateLocation);
 
   const result = await prisma.listing.updateMany({
     where: {id, ownerId, status: 'ACTIVE'},
@@ -215,6 +217,8 @@ function toCreateData(input: ListingInput, ownerId: string) {
     availableFrom: new Date(`${input.availableFrom}T00:00:00.000Z`),
     minimumStay: input.minimumStay,
     amenities: input.amenities as ListingAmenity[],
+    approximateLatitude: input.approximateLocation ? roundCoordinate(input.approximateLocation.latitude) : null,
+    approximateLongitude: input.approximateLocation ? roundCoordinate(input.approximateLocation.longitude) : null,
   };
 }
 
@@ -230,6 +234,10 @@ function toUpdateData(input: Partial<ListingInput>) {
     ...(input.availableFrom !== undefined ? {availableFrom: new Date(`${input.availableFrom}T00:00:00.000Z`)} : {}),
     ...(input.minimumStay !== undefined ? {minimumStay: input.minimumStay} : {}),
     ...(input.amenities !== undefined ? {amenities: input.amenities as ListingAmenity[]} : {}),
+    ...(input.approximateLocation !== undefined ? {
+      approximateLatitude: input.approximateLocation ? roundCoordinate(input.approximateLocation.latitude) : null,
+      approximateLongitude: input.approximateLocation ? roundCoordinate(input.approximateLocation.longitude) : null,
+    } : {}),
   };
 }
 
@@ -256,7 +264,32 @@ async function serializeListing(listing: Prisma.ListingGetPayload<{include: type
       id: item.id, url: await createSignedViewUrl(item.objectKey), contentType: item.contentType,
       byteSize: item.byteSize, altText: item.altText,
     }))),
+    approximateLocation: listing.approximateLatitude === null || listing.approximateLongitude === null
+      ? null
+      : {latitude: listing.approximateLatitude, longitude: listing.approximateLongitude},
   };
+}
+
+function roundCoordinate(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function assertLocationWithinCity(cityId: 'bengaluru' | 'mumbai' | 'delhi' | 'hyderabad', location: {latitude: number; longitude: number} | null | undefined) {
+  if (!location) return;
+  const centers = {
+    bengaluru: {latitude: 12.9716, longitude: 77.5946},
+    mumbai: {latitude: 19.0596, longitude: 72.8295},
+    delhi: {latitude: 28.5672, longitude: 77.21},
+    hyderabad: {latitude: 17.4326, longitude: 78.4071},
+  };
+  const center = centers[cityId];
+  const radians = Math.PI / 180;
+  const latDelta = (location.latitude - center.latitude) * radians;
+  const lngDelta = (location.longitude - center.longitude) * radians;
+  const haversine = Math.sin(latDelta / 2) ** 2 +
+    Math.cos(center.latitude * radians) * Math.cos(location.latitude * radians) * Math.sin(lngDelta / 2) ** 2;
+  const distanceKm = 6_371 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+  if (distanceKm > 150) throw new HttpError(400, 'LOCATION_OUTSIDE_CITY', 'Choose a map pin within the selected city area.');
 }
 
 async function assertCursor(cursor: string | undefined, ownerId?: string) {

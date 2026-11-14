@@ -45,10 +45,12 @@ The current identity slice implements registration, login/logout, session lookup
 - [x] Upload listing images to private S3-compatible object storage using validated signed uploads, with size/type limits and verification status.
 - [ ] Add video uploads and asynchronous media processing/transcoding.
 - [x] Filter listings by the desired move-in date and all selected amenities.
-- [ ] Add map-friendly coordinates with location privacy controls.
+- [x] Add map-friendly listing coordinates rounded to neighborhood-level precision, with an optional owner-selected map pin.
 - Acceptance: listing changes persist across devices, unauthorized edits are rejected, and incomplete uploads never appear as published listings.
 
 Listing photos use private S3-compatible object storage. The API creates short-lived signed upload URLs, checks stored size, declared content type, and file signature before marking a photo ready, and returns temporary read URLs. Local development uses MinIO via `docker compose -f infra/compose.yaml up -d minio minio-init`; configure the `MEDIA_S3_*` values in `.env` (copy the local examples). Uploads are limited to five JPEG/PNG/WebP images per active listing, 10 MB each. Video and image processing are still deferred. Public listing responses intentionally expose neighborhood-level location only.
+
+Listing owners can optionally select an approximate map pin. The API rounds coordinates to two decimal places (roughly one kilometer) before persisting or returning them; exact pin coordinates never enter the database. This uses the restricted browser Maps key already needed by the map screen. Listings can still be created without a pin or Maps credentials.
 
 ### 3. Compatibility and matching
 

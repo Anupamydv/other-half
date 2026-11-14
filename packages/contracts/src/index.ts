@@ -80,6 +80,10 @@ export const listingCreateSchema = z.object({
   minimumStay: z.number().int().min(1).max(36),
   amenities: z.array(listingAmenitySchema).max(7)
     .refine((amenities) => new Set(amenities).size === amenities.length, 'Remove duplicate amenities.'),
+  approximateLocation: z.object({
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+  }).nullable().default(null),
 });
 
 export const listingUpdateSchema = listingCreateSchema.partial()
@@ -128,6 +132,7 @@ export const listingDtoSchema = z.object({
   ownerDisplayName: z.string(),
   savedByMe: z.boolean(),
   media: z.array(z.object({id: z.string(), url: z.url(), contentType: z.string(), byteSize: z.number().int().positive(), altText: z.string()})),
+  approximateLocation: z.object({latitude: z.number(), longitude: z.number()}).nullable(),
 });
 export const listingPageSchema = z.object({items: z.array(listingDtoSchema), nextCursor: z.string().nullable()});
 
