@@ -1,5 +1,5 @@
 import {useEffect, useState, type FormEvent} from 'react';
-import {Archive, ArrowLeft, Bookmark, BookmarkCheck, Building2, CalendarDays, Check, ChevronDown, Home, MapPin, Pencil, Plus, Search, Trash2, Upload} from 'lucide-react';
+import {Archive, ArrowLeft, Bookmark, BookmarkCheck, Building2, CalendarDays, Check, ChevronDown, Home, MapPin, Pencil, Plus, Search, Trash2, Upload, Map as MapIcon, LayoutGrid} from 'lucide-react';
 import {
   listingCreateSchema,
   type ListingAmenity,
@@ -11,6 +11,7 @@ import {CITY_THEMES} from '../data/indiaData';
 import {archiveListing, createListing, deleteListingPhoto, getListings, getMyListings, getSavedListings, saveListing, unsaveListing, updateListing, uploadListingPhoto} from '../services/listings';
 import {TourRequestForm} from './TourRequestForm';
 import {ApproximateMapPicker} from './ApproximateMapPicker';
+import {ListingsMap} from './ListingsMap';
 import type {CityId} from '../types';
 
 interface ListingsViewProps {
@@ -39,6 +40,7 @@ const AMENITIES: Array<{id: ListingAmenity; label: string}> = [
 
 export function ListingsView({cityId, neighborhood, userId}: ListingsViewProps) {
   const [mode, setMode] = useState<ViewMode>('browse');
+  const [mapView, setMapView] = useState(false);
   const [items, setItems] = useState<ListingDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [rentInput, setRentInput] = useState('');
@@ -204,6 +206,7 @@ export function ListingsView({cityId, neighborhood, userId}: ListingsViewProps) 
           <label className="flex h-10 items-center gap-2 rounded-full bg-white px-3 text-xs font-semibold text-[#64748B]">
             <span>Move in by</span><input aria-label="Available by date" type="date" min={new Date().toISOString().slice(0, 10)} value={availableBy} onChange={(event) => setAvailableBy(event.target.value)} className="max-w-32 bg-transparent text-xs text-[#1E293B] outline-none" />
           </label>
+          <button type="button" aria-pressed={mapView} onClick={() => setMapView((current) => !current)} className="inline-flex h-10 items-center gap-1.5 rounded-full bg-white px-3 text-xs font-bold text-[#475569] hover:bg-[#F4F2EE]">{mapView ? <LayoutGrid className="h-4 w-4" /> : <MapIcon className="h-4 w-4" />}{mapView ? 'Show cards' : 'Show map'}</button>
         </> : mode === 'mine' ? <label className="ml-auto flex h-10 items-center gap-2 rounded-full bg-white px-3 text-xs font-semibold text-[#64748B]">
           <span className="sr-only">Listing status</span><select aria-label="Filter my listings by status" value={mineStatus} onChange={(event) => setMineStatus(event.target.value as '' | 'ACTIVE' | 'ARCHIVED')} className="bg-transparent text-sm text-[#1E293B] outline-none"><option value="">All statuses</option><option value="ACTIVE">Active</option><option value="ARCHIVED">Archived</option></select><ChevronDown className="h-3.5 w-3.5" />
         </label> : null}
@@ -226,7 +229,7 @@ export function ListingsView({cityId, neighborhood, userId}: ListingsViewProps) 
           {mode === 'mine' && <button onClick={startCreate} className="mt-4 rounded-full bg-[#F05A4A] px-5 py-2.5 text-sm font-bold text-white">Create a listing</button>}
           {mode === 'saved' && <button onClick={() => setMode('browse')} className="mt-4 rounded-full bg-[#1E293B] px-5 py-2.5 text-sm font-bold text-white">Browse homes</button>}
         </div>
-      ) : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      ) : mode === 'browse' && mapView ? <ListingsMap key={cityId} cityId={cityId} listings={items} /> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {items.map((listing) => <ListingCard
           key={listing.id}
           listing={listing}

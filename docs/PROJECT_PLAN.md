@@ -74,6 +74,7 @@ Discovery is account-backed and city-scoped. Profiles are hidden until the membe
 
 ### 5. Maps and commute discovery
 
+- [x] Browse owner-opted-in approximate listing pins on a map alongside filtered housing search.
 - Browser geolocation with clear consent and manual fallback; do not persist precise user location by default.
 - Maps and routing through restricted, monitored provider credentials; handle quotas, provider errors, and unsupported travel modes.
 - Acceptance: navigation only uses user-approved origin and clearly distinguishes estimate from confirmed address.
