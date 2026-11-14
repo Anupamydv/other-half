@@ -1,6 +1,7 @@
 import React, {Suspense, lazy, useCallback, useEffect, useMemo, useState} from 'react';
 import {
   Compass,
+  CalendarCheck,
   Heart,
   House,
   Map as MapIcon,
@@ -36,14 +37,17 @@ const SwipeDeckView = lazy(() =>
 const MatchesView = lazy(() =>
   import('./components/MatchesView').then((module) => ({default: module.MatchesView}))
 );
-const MessagesView = lazy(() =>
-  import('./components/MessagesView').then((module) => ({default: module.MessagesView}))
+const ConversationsView = lazy(() =>
+  import('./components/ConversationsView').then((module) => ({default: module.ConversationsView}))
 );
 const ProfileQuizView = lazy(() =>
   import('./components/ProfileQuizView').then((module) => ({default: module.ProfileQuizView}))
 );
 const ListingsView = lazy(() =>
   import('./components/ListingsView').then((module) => ({default: module.ListingsView}))
+);
+const ToursView = lazy(() =>
+  import('./components/ToursView').then((module) => ({default: module.ToursView}))
 );
 const CreatePostModal = lazy(() =>
   import('./components/CreatePostModal').then((module) => ({default: module.CreatePostModal}))
@@ -66,9 +70,7 @@ export default function App() {
     passedIds,
     matchedIds,
     superIds,
-    conversations,
     bookedTours,
-    unreadMessagesCount,
     canUndoSwipe,
     celebrationProfile,
     setCelebrationProfile,
@@ -81,8 +83,6 @@ export default function App() {
     handleSwipeAction,
     undoLastSwipe,
     resetSwipeDeck,
-    sendMessage,
-    markConversationRead,
     bookHouseTour,
     updateUserPreferences,
     updateUserProfileDetails,
@@ -178,7 +178,8 @@ export default function App() {
   const [focusedLandmark, setFocusedLandmark] = useState<LandmarkPlace | null>(null);
   const [detailProfile, setDetailProfile] = useState<RoommateProfile | null>(null);
   const [showCreatePost, setShowCreatePost] = useState(false);
-  const [activeChatProfileId, setActiveChatProfileId] = useState<string | null>(null);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [interactionNotice, setInteractionNotice] = useState('');
   // Filtered city flats/profiles
   const cityProfiles = useMemo(() => {
     return profiles.filter((p) => {
@@ -259,16 +260,17 @@ export default function App() {
     }
   };
 
-  const handleOpenChat = (profileId: string) => {
-    setActiveChatProfileId(profileId);
-    markConversationRead(profileId);
-    setActiveTab('messages');
+  const handleOpenChat = (_profileId: string) => {
+    setInteractionNotice('Sample roommate matches do not have real accounts yet. A private chat becomes available after a home visit is confirmed.');
   };
 
-  const handleSendIcebreaker = (profileId: string, text: string) => {
-    sendMessage(profileId, text);
+  const handleSendIcebreaker = (_profileId: string, _text: string) => {
     setCelebrationProfile(null);
-    setActiveChatProfileId(profileId);
+    handleOpenChat(_profileId);
+  };
+
+  const handleOpenTourConversation = (conversationId: string) => {
+    setActiveConversationId(conversationId);
     setActiveTab('messages');
   };
 
@@ -306,13 +308,11 @@ export default function App() {
                 {id: 'explore', label: 'Explore'},
                 {id: 'listings', label: 'Homes'},
                 {id: 'map', label: 'Live Map'},
+                {id: 'tours', label: 'Tours'},
                 {id: 'matches', label: `Matches (${matchedIds.length})`},
                 {
                   id: 'messages',
-                  label:
-                    unreadMessagesCount > 0
-                      ? `Messages (${unreadMessagesCount})`
-                      : 'Messages',
+                  label: 'Messages',
                 },
                 {id: 'profile', label: 'Profile & Quiz'},
               ] as const
@@ -354,8 +354,9 @@ export default function App() {
 
       <div className="mx-auto mt-3 max-w-[1240px] px-4 sm:px-6 lg:px-10">
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs leading-5 text-amber-900">
-          The Homes tab shows live listings saved through the API. Roommate cards, matches, and chats in the other tabs are sample content while those features are being built.
+          Homes, Tours, and Messages use saved API data. Roommate cards and matches are sample content; chats start after a confirmed home visit.
         </p>
+        {interactionNotice && <div role="status" className="mt-2 flex items-start justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-xs leading-5 text-sky-900"><span>{interactionNotice}</span><button aria-label="Dismiss" onClick={() => setInteractionNotice('')} className="font-bold">×</button></div>}
       </div>
 
       {/* Main Content Canvas */}
@@ -526,6 +527,12 @@ export default function App() {
           </Suspense>
         )}
 
+        {activeTab === 'tours' && (
+          <Suspense fallback={<div className="rounded-3xl bg-white p-8 text-center text-sm text-[#64748B]">Loading visit requests…</div>}>
+            <ToursView onOpenConversation={handleOpenTourConversation} />
+          </Suspense>
+        )}
+
         {/* MATCHES TAB */}
         {activeTab === 'matches' && (
           <Suspense fallback={<div className="rounded-3xl bg-white p-8 text-center text-sm text-[#64748B]">Loading matches…</div>}>
@@ -547,19 +554,7 @@ export default function App() {
         {/* MESSAGES TAB */}
         {activeTab === 'messages' && (
           <Suspense fallback={<div className="rounded-3xl bg-white p-8 text-center text-sm text-[#64748B]">Loading conversations…</div>}>
-            <MessagesView
-              profiles={profiles}
-              matchedIds={matchedIds}
-              conversations={conversations}
-              activeProfileId={activeChatProfileId}
-              onSelectConversation={(id) => {
-                setActiveChatProfileId(id);
-                markConversationRead(id);
-              }}
-              onSendMessage={(id, text) => sendMessage(id, text)}
-              onOpenDetail={(prof) => setDetailProfile(prof)}
-              onNavigateToProfile={handleNavigateToProfile}
-            />
+            <ConversationsView userId={account.user.id} initialConversationId={activeConversationId} />
           </Suspense>
         )}
 
@@ -580,13 +575,14 @@ export default function App() {
       {/* Mobile Floating Navigation Dock (< 15% Viewport Height) */}
       <nav
         aria-label="Mobile bottom navigation"
-        className="md:hidden fixed bottom-3 left-3 right-3 z-40 h-14 rounded-full bg-white/94 backdrop-blur-md border border-white/60 shadow-kinship-dock px-2 grid grid-cols-6 items-center"
+        className="md:hidden fixed bottom-3 left-3 right-3 z-40 h-14 rounded-full bg-white/94 backdrop-blur-md border border-white/60 shadow-kinship-dock px-2 grid grid-cols-7 items-center"
       >
         {(
           [
             {id: 'explore', label: 'Explore', icon: Compass},
             {id: 'listings', label: 'Homes', icon: House},
             {id: 'map', label: 'Map', icon: MapIcon},
+            {id: 'tours', label: 'Tours', icon: CalendarCheck},
             {id: 'matches', label: 'Matches', icon: Heart},
             {id: 'messages', label: 'Chats', icon: MessageCircle},
             {id: 'profile', label: 'Profile', icon: User},
@@ -609,9 +605,6 @@ export default function App() {
               <span className="text-[10px] font-bold mt-0.5 leading-none">
                 {tab.label}
               </span>
-              {tab.id === 'messages' && unreadMessagesCount > 0 && (
-                <span className="absolute top-1.5 right-4 w-2 h-2 rounded-full bg-[#F05A4A]" />
-              )}
             </button>
           );
         })}

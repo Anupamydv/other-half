@@ -9,6 +9,7 @@ import {
 } from '@other-half/contracts';
 import {CITY_THEMES} from '../data/indiaData';
 import {archiveListing, createListing, getListings, getMyListings, getSavedListings, saveListing, unsaveListing, updateListing} from '../services/listings';
+import {TourRequestForm} from './TourRequestForm';
 import type {CityId} from '../types';
 
 interface ListingsViewProps {
@@ -46,6 +47,7 @@ export function ListingsView({cityId, neighborhood, userId}: ListingsViewProps) 
   const [filterAmenities, setFilterAmenities] = useState<ListingAmenity[]>([]);
   const [mineStatus, setMineStatus] = useState<'' | 'ACTIVE' | 'ARCHIVED'>('');
   const [editing, setEditing] = useState<ListingDto | null>(null);
+  const [tourTarget, setTourTarget] = useState<ListingDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [savingListingId, setSavingListingId] = useState<string | null>(null);
@@ -229,20 +231,27 @@ export function ListingsView({cityId, neighborhood, userId}: ListingsViewProps) 
           listing={listing}
           isOwner={listing.ownerId === userId}
           showSave={mode === 'saved' || (mode === 'browse' && listing.ownerId !== userId)}
+          showRequest={listing.status === 'ACTIVE' && listing.ownerId !== userId && (mode === 'browse' || mode === 'saved')}
           saving={savingListingId === listing.id}
           onEdit={() => {setEditing(listing); setMode('form'); setNotice('');}}
           onArchive={() => void handleArchive(listing)}
           onToggleSave={() => void handleToggleSaved(listing)}
+          onRequestTour={() => setTourTarget(listing)}
         />)}
       </div>}
       {!loading && nextCursor && <div className="text-center"><button disabled={loadingMore} onClick={() => void loadMore()} className="rounded-full bg-white px-5 py-3 text-sm font-bold text-[#1E293B] disabled:opacity-50">{loadingMore ? 'Loading…' : 'Load more homes'}</button></div>}
+      {tourTarget && <TourRequestForm
+        listing={tourTarget}
+        onClose={() => setTourTarget(null)}
+        onSent={() => {setTourTarget(null); setNotice('Visit request sent. Track replies in the Tours tab.');}}
+      />}
     </section>
   );
 }
 
-function ListingCard({listing, isOwner, showSave, saving, onEdit, onArchive, onToggleSave}: {
-  listing: ListingDto; isOwner: boolean; showSave: boolean; saving: boolean;
-  onEdit: () => void; onArchive: () => void; onToggleSave: () => void;
+function ListingCard({listing, isOwner, showSave, showRequest, saving, onEdit, onArchive, onToggleSave, onRequestTour}: {
+  listing: ListingDto; isOwner: boolean; showSave: boolean; showRequest: boolean; saving: boolean;
+  onEdit: () => void; onArchive: () => void; onToggleSave: () => void; onRequestTour: () => void;
 }) {
   const city = CITY_THEMES[listing.cityId];
   const rent = new Intl.NumberFormat('en-IN', {style: 'currency', currency: 'INR', maximumFractionDigits: 0}).format(listing.monthlyRent);
@@ -271,6 +280,7 @@ function ListingCard({listing, isOwner, showSave, saving, onEdit, onArchive, onT
       <button onClick={onEdit} className="flex-1 rounded-xl bg-[#F4F2EE] px-3 py-2.5 text-xs font-bold text-[#1E293B] hover:bg-[#EAE6DF]"><Pencil className="mr-1 inline h-3.5 w-3.5" /> Edit</button>
       <button onClick={onArchive} className="rounded-xl bg-red-50 px-3 py-2.5 text-xs font-bold text-red-700 hover:bg-red-100"><Archive className="mr-1 inline h-3.5 w-3.5" /> Archive</button>
     </div>}
+    {showRequest && <button onClick={onRequestTour} className="mt-4 w-full rounded-xl bg-[#F05A4A] px-3 py-2.5 text-xs font-bold text-white hover:bg-[#df4d3d]">Request a visit</button>}
   </article>;
 }
 

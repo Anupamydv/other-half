@@ -1,6 +1,6 @@
 export type CityId = 'bengaluru' | 'mumbai' | 'delhi' | 'hyderabad';
 
-export type AppTab = 'explore' | 'listings' | 'map' | 'matches' | 'messages' | 'profile';
+export type AppTab = 'explore' | 'listings' | 'map' | 'tours' | 'matches' | 'messages' | 'profile';
 export type ExploreMode = 'feed' | 'swipe';
 export type SwipeCategory = 'roommates' | 'rooms';
 export type TravelMode = 'DRIVING' | 'WALKING' | 'TWO_WHEELER' | 'TRANSIT';

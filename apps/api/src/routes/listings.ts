@@ -167,9 +167,18 @@ listingsRouter.patch('/listings/:id', requireSession, asyncRoute(async (request,
 listingsRouter.post('/listings/:id/archive', requireSession, asyncRoute(async (request, response) => {
   const ownerId = response.locals.sessionUserId as string;
   const id = request.params.id as string;
-  const result = await prisma.listing.updateMany({
-    where: {id, ownerId, status: 'ACTIVE'},
-    data: {status: 'ARCHIVED', archivedAt: new Date()},
+  const result = await prisma.$transaction(async (transaction) => {
+    const archived = await transaction.listing.updateMany({
+      where: {id, ownerId, status: 'ACTIVE'},
+      data: {status: 'ARCHIVED', archivedAt: new Date()},
+    });
+    if (archived.count === 1) {
+      await transaction.tourRequest.updateMany({
+        where: {listingId: id, status: 'PENDING'},
+        data: {status: 'CANCELLED'},
+      });
+    }
+    return archived;
   });
   if (result.count !== 1) {
     const owned = await prisma.listing.findFirst({where: {id, ownerId}, select: {id: true}});

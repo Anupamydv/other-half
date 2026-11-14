@@ -134,3 +134,69 @@ export type ListingAmenity = z.infer<typeof listingAmenitySchema>;
 export type ListingInput = z.infer<typeof listingCreateSchema>;
 export type ListingUpdate = z.infer<typeof listingUpdateSchema>;
 export type ListingDto = z.infer<typeof listingDtoSchema>;
+
+export const tourTimeSlotSchema = z.enum(['MORNING', 'AFTERNOON', 'EVENING']);
+export const tourRequestStatusSchema = z.enum(['PENDING', 'CONFIRMED', 'DECLINED', 'CANCELLED']);
+export type TourTimeSlot = z.infer<typeof tourTimeSlotSchema>;
+
+export function isTourSlotAvailable(date: string, timeSlot: TourTimeSlot, now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23',
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const todayInIndia = `${values.year}-${values.month}-${values.day}`;
+  if (date > todayInIndia) return true;
+  if (date < todayInIndia) return false;
+  const startHour = {MORNING: 9, AFTERNOON: 12, EVENING: 16}[timeSlot];
+  return Number(values.hour) < startHour;
+}
+
+export const createTourRequestSchema = z.object({
+  scheduledDate: futureOrCurrentDate,
+  timeSlot: tourTimeSlotSchema,
+  note: z.string().trim().max(500).default(''),
+}).superRefine((request, context) => {
+  if (!isTourSlotAvailable(request.scheduledDate, request.timeSlot)) {
+    context.addIssue({code: 'custom', path: ['timeSlot'], message: 'Choose a visit window that has not started yet.'});
+  }
+});
+export const tourDecisionSchema = z.object({decision: z.enum(['CONFIRM', 'DECLINE'])});
+export const tourRequestQuerySchema = z.object({
+  direction: z.enum(['incoming', 'outgoing']).default('outgoing'),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  cursor: z.string().min(1).max(64).optional(),
+});
+export const tourRequestDtoSchema = z.object({
+  id: z.string(),
+  listingId: z.string(),
+  listingTitle: z.string(),
+  cityId: cityIdSchema,
+  neighborhood: z.string(),
+  requesterId: z.string(),
+  requesterDisplayName: z.string(),
+  ownerId: z.string(),
+  ownerDisplayName: z.string(),
+  scheduledDate: z.iso.date(),
+  timeSlot: tourTimeSlotSchema,
+  note: z.string(),
+  status: tourRequestStatusSchema,
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+export const tourRequestPageSchema = z.object({items: z.array(tourRequestDtoSchema), nextCursor: z.string().nullable()});
+
+export type TourRequestDto = z.infer<typeof tourRequestDtoSchema>;
+
+export const sendMessageSchema = z.object({body: z.string().trim().min(1).max(2000)});
+export const conversationMessageSchema = z.object({
+  id: z.string(), conversationId: z.string(), senderId: z.string(), body: z.string(), createdAt: z.iso.datetime(),
+});
+export const conversationMessagePageSchema = z.object({items: z.array(conversationMessageSchema), nextCursor: z.string().nullable()});
+export const conversationDtoSchema = z.object({
+  id: z.string(), listingId: z.string(), listingTitle: z.string(), cityId: cityIdSchema, neighborhood: z.string(),
+  peerId: z.string(), peerDisplayName: z.string(), lastMessage: conversationMessageSchema.nullable(),
+  lastMessageAt: z.iso.datetime(), unread: z.boolean(), blockedByMe: z.boolean(), blockedByPeer: z.boolean(),
+});
+export const conversationPageSchema = z.object({items: z.array(conversationDtoSchema)});
+export type ConversationDto = z.infer<typeof conversationDtoSchema>;
+export type ConversationMessageDto = z.infer<typeof conversationMessageSchema>;

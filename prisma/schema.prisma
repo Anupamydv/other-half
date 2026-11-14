@@ -17,6 +17,12 @@ model User {
   sessions     Session[]
   listings     Listing[]
   savedListings SavedListing[]
+  tourRequests TourRequest[] @relation("TourRequester")
+  ownedConversations Conversation[] @relation("ConversationOwner")
+  guestConversations Conversation[] @relation("ConversationGuest")
+  sentMessages ConversationMessage[]
+  blocksGiven UserBlock[] @relation("UserBlocksGiven")
+  blocksReceived UserBlock[] @relation("UserBlocksReceived")
 
   @@index([createdAt])
 }
@@ -67,6 +73,8 @@ model Listing {
   archivedAt     DateTime?
   owner          User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   savedBy        SavedListing[]
+  tourRequests   TourRequest[]
+  conversations  Conversation[]
 
   @@index([status, city, neighborhood, monthlyRent])
   @@index([status, city, neighborhood, availableFrom])
@@ -85,6 +93,67 @@ model SavedListing {
   @@id([userId, listingId])
   @@index([listingId])
   @@index([userId, createdAt])
+}
+
+model TourRequest {
+  id                String            @id @default(cuid())
+  listingId         String
+  requesterId       String
+  scheduledDate     DateTime          @db.Date
+  timeSlot          TourTimeSlot
+  note              String            @default("") @db.VarChar(500)
+  status            TourRequestStatus @default(PENDING)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  listing           Listing           @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  requester         User              @relation("TourRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, status, scheduledDate])
+  @@index([requesterId, status, createdAt])
+}
+
+model Conversation {
+  id             String                @id @default(cuid())
+  listingId      String
+  ownerId        String
+  guestId        String
+  ownerReadAt    DateTime?
+  guestReadAt    DateTime?
+  lastMessageAt  DateTime              @default(now())
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  listing        Listing               @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  owner          User                  @relation("ConversationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  guest          User                  @relation("ConversationGuest", fields: [guestId], references: [id], onDelete: Cascade)
+  messages       ConversationMessage[]
+
+  @@unique([listingId, ownerId, guestId])
+  @@index([ownerId, lastMessageAt])
+  @@index([guestId, lastMessageAt])
+}
+
+model ConversationMessage {
+  id             String       @id @default(cuid())
+  conversationId String
+  senderId       String
+  body           String       @db.VarChar(2000)
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([senderId, createdAt])
+}
+
+model UserBlock {
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+  blocker   User     @relation("UserBlocksGiven", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("UserBlocksReceived", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@id([blockerId, blockedId])
+  @@index([blockedId])
 }
 
 enum City {
@@ -113,4 +182,17 @@ enum ListingAmenity {
 enum ListingStatus {
   ACTIVE
   ARCHIVED
+}
+
+enum TourRequestStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+  CANCELLED
+}
+
+enum TourTimeSlot {
+  MORNING
+  AFTERNOON
+  EVENING
 }
