@@ -1,10 +1,12 @@
 import cors from 'cors';
-import express, {type ErrorRequestHandler} from 'express';
+import express, {type ErrorRequestHandler, type RequestHandler} from 'express';
 import helmet from 'helmet';
 import {randomUUID} from 'node:crypto';
 import {pinoHttp} from 'pino-http';
 import {env} from './config/env.js';
 import {logger} from './lib/logger.js';
+import {apiErrorHandler, HttpError} from './lib/http.js';
+import {authRouter} from './routes/auth.js';
 import {healthRouter} from './routes/health.js';
 
 export const app = express();
@@ -18,6 +20,31 @@ app.use(
   }),
 );
 app.use(express.json({limit: '1mb'}));
+const AUTH_WINDOW_MS = 15 * 60 * 1000;
+const AUTH_REQUEST_LIMIT = 12;
+const authAttempts = new Map<string, {count: number; resetAt: number}>();
+const authRateLimit: RequestHandler = (request, response, next) => {
+  const now = Date.now();
+  const key = request.ip ?? 'unknown';
+  let bucket = authAttempts.get(key);
+  if (!bucket || bucket.resetAt <= now) {
+    bucket = {count: 0, resetAt: now + AUTH_WINDOW_MS};
+    authAttempts.set(key, bucket);
+  }
+  if (authAttempts.size > 10_000) {
+    for (const [ip, item] of authAttempts) if (item.resetAt <= now) authAttempts.delete(ip);
+  }
+  bucket.count += 1;
+  response.setHeader('RateLimit-Limit', AUTH_REQUEST_LIMIT);
+  response.setHeader('RateLimit-Remaining', Math.max(0, AUTH_REQUEST_LIMIT - bucket.count));
+  if (bucket.count > AUTH_REQUEST_LIMIT) {
+    response.setHeader('RateLimit-Reset', Math.ceil((bucket.resetAt - now) / 1000));
+    response.status(429).json({error: {code: 'RATE_LIMITED', message: 'Too many account requests. Try again later.'}});
+    return;
+  }
+  next();
+};
+
 app.use(
   pinoHttp({
     logger,
@@ -29,10 +56,19 @@ app.use(
     },
   }),
 );
+app.use((request, _response, next) => {
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && request.get('origin') !== env.WEB_ORIGIN) {
+    next(new HttpError(403, 'ORIGIN_NOT_ALLOWED', 'Request origin is not allowed.'));
+    return;
+  }
+  next();
+});
 
 app.get('/api/v1/health/live', (_request, response) => {
   response.json({status: 'ok', timestamp: new Date().toISOString()});
 });
+app.use('/api/v1/auth', authRateLimit);
+app.use('/api/v1', authRouter);
 app.use('/api/v1', healthRouter);
 
 app.use((_request, response) => {
@@ -48,10 +84,11 @@ const errorHandler: ErrorRequestHandler = (error, request, response, _next) => {
       ...(requestId ? {requestId} : {}),
     },
   });
-  request.log.error(
+  request.log?.error(
     {errorName: error instanceof Error ? error.name : 'UnknownError'},
     'Unhandled API error',
   );
 };
 
+app.use(apiErrorHandler);
 app.use(errorHandler);
