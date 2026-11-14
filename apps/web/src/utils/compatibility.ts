@@ -115,15 +115,10 @@ export function calculateCompatibility(
 
   // 6. Budget Alignment
   const budgetDiff = Math.abs(user.maxBudget - otherBudgetOrRent);
-  let budgetScore = 100;
-  if (otherBudgetOrRent <= user.maxBudget) {
-    budgetScore = budgetDiff <= 5000 ? 100 : 90;
-    sharedHabits.push('Budget Match');
-  } else if (otherBudgetOrRent - user.maxBudget <= 4000) {
-    budgetScore = 78;
-  } else {
-    budgetScore = Math.max(45, 78 - Math.floor((otherBudgetOrRent - user.maxBudget) / 1000) * 4);
-  }
+  const budgetScore = budgetDiff <= 5_000
+    ? 100
+    : Math.max(45, 100 - Math.ceil((budgetDiff - 5_000) / 5_000) * 10);
+  if (budgetDiff <= 5_000) sharedHabits.push('Budget Match');
 
   axes.push({
     key: 'budget',

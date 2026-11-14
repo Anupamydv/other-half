@@ -11,6 +11,7 @@ model User {
   id           String    @id @default(cuid())
   email        String    @unique
   passwordHash String
+  isModerator  Boolean   @default(false)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   profile      Profile?
@@ -23,6 +24,19 @@ model User {
   sentMessages ConversationMessage[]
   blocksGiven UserBlock[] @relation("UserBlocksGiven")
   blocksReceived UserBlock[] @relation("UserBlocksReceived")
+  notifications Notification[]
+  discoveryActionsMade DiscoveryAction[] @relation("DiscoveryActionActor")
+  discoveryActionsReceived DiscoveryAction[] @relation("DiscoveryActionTarget")
+  lowMatches Match[] @relation("MatchLowUser")
+  highMatches Match[] @relation("MatchHighUser")
+  reportsSubmitted UserReport[] @relation("ReportAuthor")
+  reportsReceived UserReport[] @relation("ReportSubject")
+  reportsReviewed UserReport[] @relation("ReportReviewer")
+  mediaUploads ListingMedia[]
+  communityPosts CommunityPost[]
+  communityPostLikes CommunityPostLike[]
+  communityPostSaves CommunityPostSave[]
+  communityPostComments CommunityPostComment[]
 
   @@index([createdAt])
 }
@@ -37,6 +51,7 @@ model Profile {
   neighborhood String?
   bio          String   @default("") @db.VarChar(500)
   preferences  Json?
+  discoveryEnabled Boolean @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -67,6 +82,8 @@ model Listing {
   availableFrom  DateTime        @db.Date
   minimumStay    Int             @default(6)
   amenities      ListingAmenity[] @default([])
+  approximateLatitude Float?
+  approximateLongitude Float?
   status         ListingStatus   @default(ACTIVE)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -75,6 +92,7 @@ model Listing {
   savedBy        SavedListing[]
   tourRequests   TourRequest[]
   conversations  Conversation[]
+  media          ListingMedia[]
 
   @@index([status, city, neighborhood, monthlyRent])
   @@index([status, city, neighborhood, availableFrom])
@@ -95,6 +113,27 @@ model SavedListing {
   @@index([userId, createdAt])
 }
 
+model ListingMedia {
+  id          String          @id @default(cuid())
+  listingId   String
+  uploaderId  String
+  objectKey   String          @unique
+  contentType String          @db.VarChar(100)
+  byteSize    Int
+  altText     String          @default("") @db.VarChar(200)
+  sortOrder   Int             @default(0)
+  status      ListingMediaStatus @default(PENDING)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  verifiedAt  DateTime?
+  expiresAt   DateTime        @default(now())
+  listing     Listing         @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  uploader    User            @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, status, sortOrder, createdAt])
+  @@index([uploaderId, createdAt])
+}
+
 model TourRequest {
   id                String            @id @default(cuid())
   listingId         String
@@ -107,6 +146,7 @@ model TourRequest {
   updatedAt         DateTime          @updatedAt
   listing           Listing           @relation(fields: [listingId], references: [id], onDelete: Cascade)
   requester         User              @relation("TourRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  notifications     Notification[]
 
   @@index([listingId, status, scheduledDate])
   @@index([requesterId, status, createdAt])
@@ -114,7 +154,8 @@ model TourRequest {
 
 model Conversation {
   id             String                @id @default(cuid())
-  listingId      String
+  listingId      String?
+  matchId        String?               @unique
   ownerId        String
   guestId        String
   ownerReadAt    DateTime?
@@ -122,7 +163,8 @@ model Conversation {
   lastMessageAt  DateTime              @default(now())
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
-  listing        Listing               @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listing        Listing?              @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  match          Match?                @relation(fields: [matchId], references: [id], onDelete: Cascade)
   owner          User                  @relation("ConversationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   guest          User                  @relation("ConversationGuest", fields: [guestId], references: [id], onDelete: Cascade)
   messages       ConversationMessage[]
@@ -154,6 +196,70 @@ model UserBlock {
 
   @@id([blockerId, blockedId])
   @@index([blockedId])
+}
+
+model Notification {
+  id            String           @id @default(cuid())
+  userId        String
+  tourRequestId String
+  type          NotificationType
+  title         String           @db.VarChar(120)
+  body          String           @db.VarChar(300)
+  createdAt     DateTime         @default(now())
+  readAt        DateTime?
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tourRequest   TourRequest      @relation(fields: [tourRequestId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@index([tourRequestId])
+}
+
+model DiscoveryAction {
+  id         String               @id @default(cuid())
+  actorId    String
+  targetId   String
+  action     DiscoveryActionType
+  createdAt  DateTime             @default(now())
+  actor      User                 @relation("DiscoveryActionActor", fields: [actorId], references: [id], onDelete: Cascade)
+  target     User                 @relation("DiscoveryActionTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([actorId, targetId])
+  @@index([actorId, createdAt])
+  @@index([targetId, action])
+}
+
+model Match {
+  id         String   @id @default(cuid())
+  lowUserId  String
+  highUserId String
+  createdAt  DateTime @default(now())
+  lowUser    User     @relation("MatchLowUser", fields: [lowUserId], references: [id], onDelete: Cascade)
+  highUser   User     @relation("MatchHighUser", fields: [highUserId], references: [id], onDelete: Cascade)
+  conversation Conversation?
+
+  @@unique([lowUserId, highUserId])
+  @@index([lowUserId, createdAt])
+  @@index([highUserId, createdAt])
+}
+
+model UserReport {
+  id             String           @id @default(cuid())
+  reporterId     String
+  reportedUserId String
+  reviewerId     String?
+  reason         UserReportReason
+  details        String           @default("") @db.VarChar(1000)
+  status         UserReportStatus @default(OPEN)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  reviewedAt     DateTime?
+  reporter       User             @relation("ReportAuthor", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser   User             @relation("ReportSubject", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  reviewer       User?            @relation("ReportReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([reportedUserId, status, createdAt])
+  @@index([reporterId, createdAt])
 }
 
 enum City {
@@ -195,4 +301,105 @@ enum TourTimeSlot {
   MORNING
   AFTERNOON
   EVENING
+}
+
+enum NotificationType {
+  TOUR_REQUESTED
+  TOUR_CONFIRMED
+  TOUR_DECLINED
+  TOUR_CANCELLED
+}
+
+enum DiscoveryActionType {
+  PASS
+  LIKE
+  SUPER_LIKE
+}
+
+enum UserReportReason {
+  HARASSMENT
+  SCAM
+  INAPPROPRIATE
+  FAKE_PROFILE
+  OTHER
+}
+
+enum UserReportStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+enum ListingMediaStatus {
+  PENDING
+  READY
+}
+
+model CommunityPost {
+  id           String            @id @default(cuid())
+  authorId     String
+  city         City
+  neighborhood String            @db.VarChar(100)
+  postType     CommunityPostType
+  caption      String            @db.VarChar(2000)
+  rentPerMonth Int?
+  flatTitle    String?           @db.VarChar(120)
+  tags         String[]          @default([])
+  status       CommunityPostStatus @default(ACTIVE)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  author       User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  likes        CommunityPostLike[]
+  saves        CommunityPostSave[]
+  comments     CommunityPostComment[]
+
+  @@index([city, neighborhood, status, createdAt])
+  @@index([authorId, status, createdAt])
+}
+
+model CommunityPostLike {
+  postId    String
+  userId    String
+  createdAt DateTime      @default(now())
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+  @@index([userId, createdAt])
+}
+
+model CommunityPostSave {
+  postId    String
+  userId    String
+  createdAt DateTime      @default(now())
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+  @@index([userId, createdAt])
+}
+
+model CommunityPostComment {
+  id        String        @id @default(cuid())
+  postId    String
+  authorId  String
+  body      String        @db.VarChar(1000)
+  createdAt DateTime      @default(now())
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@index([authorId, createdAt])
+}
+
+enum CommunityPostType {
+  ROOM_AVAILABLE
+  LOOKING_FOR_FLATMATE
+  GENERAL
+}
+
+enum CommunityPostStatus {
+  ACTIVE
+  REMOVED
 }

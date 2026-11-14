@@ -1,5 +1,5 @@
 import {useEffect, useState, type FormEvent} from 'react';
-import {Archive, ArrowLeft, Bookmark, BookmarkCheck, Building2, CalendarDays, Check, ChevronDown, Home, MapPin, Pencil, Plus, Search} from 'lucide-react';
+import {Archive, ArrowLeft, Bookmark, BookmarkCheck, Building2, CalendarDays, Check, ChevronDown, Home, MapPin, Pencil, Plus, Search, Trash2, Upload, Map as MapIcon, LayoutGrid} from 'lucide-react';
 import {
   listingCreateSchema,
   type ListingAmenity,
@@ -8,8 +8,10 @@ import {
   type ListingType,
 } from '@other-half/contracts';
 import {CITY_THEMES} from '../data/indiaData';
-import {archiveListing, createListing, getListings, getMyListings, getSavedListings, saveListing, unsaveListing, updateListing} from '../services/listings';
+import {archiveListing, createListing, deleteListingPhoto, getListings, getMyListings, getSavedListings, saveListing, unsaveListing, updateListing, uploadListingPhoto} from '../services/listings';
 import {TourRequestForm} from './TourRequestForm';
+import {ApproximateMapPicker} from './ApproximateMapPicker';
+import {ListingsMap} from './ListingsMap';
 import type {CityId} from '../types';
 
 interface ListingsViewProps {
@@ -38,6 +40,7 @@ const AMENITIES: Array<{id: ListingAmenity; label: string}> = [
 
 export function ListingsView({cityId, neighborhood, userId}: ListingsViewProps) {
   const [mode, setMode] = useState<ViewMode>('browse');
+  const [mapView, setMapView] = useState(false);
   const [items, setItems] = useState<ListingDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [rentInput, setRentInput] = useState('');
@@ -203,6 +206,7 @@ export function ListingsView({cityId, neighborhood, userId}: ListingsViewProps) 
           <label className="flex h-10 items-center gap-2 rounded-full bg-white px-3 text-xs font-semibold text-[#64748B]">
             <span>Move in by</span><input aria-label="Available by date" type="date" min={new Date().toISOString().slice(0, 10)} value={availableBy} onChange={(event) => setAvailableBy(event.target.value)} className="max-w-32 bg-transparent text-xs text-[#1E293B] outline-none" />
           </label>
+          <button type="button" aria-pressed={mapView} onClick={() => setMapView((current) => !current)} className="inline-flex h-10 items-center gap-1.5 rounded-full bg-white px-3 text-xs font-bold text-[#475569] hover:bg-[#F4F2EE]">{mapView ? <LayoutGrid className="h-4 w-4" /> : <MapIcon className="h-4 w-4" />}{mapView ? 'Show cards' : 'Show map'}</button>
         </> : mode === 'mine' ? <label className="ml-auto flex h-10 items-center gap-2 rounded-full bg-white px-3 text-xs font-semibold text-[#64748B]">
           <span className="sr-only">Listing status</span><select aria-label="Filter my listings by status" value={mineStatus} onChange={(event) => setMineStatus(event.target.value as '' | 'ACTIVE' | 'ARCHIVED')} className="bg-transparent text-sm text-[#1E293B] outline-none"><option value="">All statuses</option><option value="ACTIVE">Active</option><option value="ARCHIVED">Archived</option></select><ChevronDown className="h-3.5 w-3.5" />
         </label> : null}
@@ -225,7 +229,7 @@ export function ListingsView({cityId, neighborhood, userId}: ListingsViewProps) 
           {mode === 'mine' && <button onClick={startCreate} className="mt-4 rounded-full bg-[#F05A4A] px-5 py-2.5 text-sm font-bold text-white">Create a listing</button>}
           {mode === 'saved' && <button onClick={() => setMode('browse')} className="mt-4 rounded-full bg-[#1E293B] px-5 py-2.5 text-sm font-bold text-white">Browse homes</button>}
         </div>
-      ) : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      ) : mode === 'browse' && mapView ? <ListingsMap key={cityId} cityId={cityId} listings={items} /> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {items.map((listing) => <ListingCard
           key={listing.id}
           listing={listing}
@@ -257,6 +261,10 @@ function ListingCard({listing, isOwner, showSave, showRequest, saving, onEdit, o
   const rent = new Intl.NumberFormat('en-IN', {style: 'currency', currency: 'INR', maximumFractionDigits: 0}).format(listing.monthlyRent);
   const labels = listing.amenities.map((amenity) => AMENITIES.find((item) => item.id === amenity)?.label ?? amenity);
   return <article className="flex flex-col rounded-[24px] bg-white p-5 shadow-kinship-1">
+    {listing.media.length > 0 && <div className="-mx-5 -mt-5 mb-4 overflow-hidden rounded-t-[24px] bg-slate-100">
+      <img src={listing.media[0].url} alt={listing.media[0].altText || `${listing.title} listing photo`} loading="lazy" className="h-48 w-full object-cover" />
+      {listing.media.length > 1 && <p className="px-3 py-1.5 text-right text-[11px] font-semibold text-slate-600">1 of {listing.media.length} photos</p>}
+    </div>}
     <div className="flex items-start justify-between gap-3">
       <span className="rounded-full bg-[#F05A4A]/10 px-3 py-1 text-[11px] font-extrabold text-[#AD2A20]">{TYPE_LABELS[listing.listingType]}</span>
       <div className="flex items-center gap-2">
@@ -266,6 +274,7 @@ function ListingCard({listing, isOwner, showSave, showRequest, saving, onEdit, o
     </div>
     <h2 className="mt-3 text-lg font-extrabold leading-snug text-[#1E293B]">{listing.title}</h2>
     <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-[#64748B]"><MapPin className="h-3.5 w-3.5" />{listing.neighborhood}, {city.name}</p>
+    {listing.approximateLocation && <a href={`https://www.google.com/maps/search/?api=1&query=${listing.approximateLocation.latitude},${listing.approximateLocation.longitude}`} target="_blank" rel="noreferrer" className="mt-2 inline-flex w-fit items-center gap-1 rounded-full bg-[#F4F2EE] px-3 py-1.5 text-[11px] font-bold text-[#475569] hover:bg-[#EAE6DF]"><MapPin className="h-3.5 w-3.5" /> Approximate area map</a>}
     <p className="mt-4 text-2xl font-extrabold text-[#1E293B]">{rent}<span className="ml-1 text-xs font-semibold text-[#64748B]">/ month</span></p>
     <p className="mt-3 line-clamp-4 flex-1 whitespace-pre-wrap text-sm leading-6 text-[#475569]">{listing.description}</p>
     <div className="mt-4 flex flex-wrap gap-1.5">
@@ -290,6 +299,7 @@ function ListingForm({cityId, listing, onCancel, onSaved}: {
   const [title, setTitle] = useState(listing?.title ?? '');
   const [description, setDescription] = useState(listing?.description ?? '');
   const [city, setCity] = useState<CityId>(listing?.cityId ?? cityId);
+  const [approximateLocation, setApproximateLocation] = useState(listing?.approximateLocation ?? null);
   const [neighborhood, setNeighborhood] = useState(listing?.neighborhood ?? '');
   const [listingType, setListingType] = useState<ListingType>(listing?.listingType ?? 'PRIVATE_ROOM');
   const [monthlyRent, setMonthlyRent] = useState(listing?.monthlyRent ? String(listing.monthlyRent) : '');
@@ -299,6 +309,16 @@ function ListingForm({cityId, listing, onCancel, onSaved}: {
   const [amenities, setAmenities] = useState<ListingAmenity[]>(listing?.amenities ?? []);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [persisted, setPersisted] = useState<ListingDto | null>(listing);
+  const [removedMedia, setRemovedMedia] = useState<string[]>([]);
+
+  useEffect(() => {
+    const urls = photos.map((file) => URL.createObjectURL(file));
+    setPreviews(urls);
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, [photos]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -306,7 +326,7 @@ function ListingForm({cityId, listing, onCancel, onSaved}: {
     const result = listingCreateSchema.safeParse({
       title, description, cityId: city, neighborhood, listingType,
       monthlyRent: Number(monthlyRent), deposit: deposit === '' ? null : Number(deposit),
-      availableFrom, minimumStay: Number(minimumStay), amenities,
+      availableFrom, minimumStay: Number(minimumStay), amenities, approximateLocation,
     });
     if (!result.success) {
       setError(result.error.issues[0]?.message ?? 'Review the listing details.');
@@ -315,8 +335,12 @@ function ListingForm({cityId, listing, onCancel, onSaved}: {
     setBusy(true);
     try {
       const input: ListingInput = result.data;
-      if (listing) await updateListing(listing.id, input);
-      else await createListing(input);
+      const target = persisted ? await updateListing(persisted.id, input) : await createListing(input);
+      setPersisted(target);
+      for (const photo of photos) {
+        await uploadListingPhoto(target.id, photo, photo.name.replace(/\.[^.]+$/, '').slice(0, 200));
+        setPhotos((current) => current.filter((item) => item !== photo));
+      }
       onSaved();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save this listing.');
@@ -331,6 +355,39 @@ function ListingForm({cityId, listing, onCancel, onSaved}: {
       : [...current, amenity]);
   };
 
+  const handlePhotoSelection = (files: FileList | null) => {
+    if (!files) return;
+    const selected = Array.from(files);
+    if ((persisted?.media.length ?? 0) + photos.length + selected.length > 5) {
+      setError('A listing can have up to five photos. Remove a photo or choose fewer files.');
+      return;
+    }
+    const invalid = selected.find((file) => !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024 || file.size === 0);
+    if (invalid) {
+      setError('Choose JPEG, PNG, or WebP photos under 10 MB each.');
+      return;
+    }
+    setError('');
+    setPhotos((current) => [...current, ...selected]);
+  };
+
+  const removeExistingPhoto = async (mediaId: string) => {
+    if (!persisted) return;
+    setBusy(true);
+    setError('');
+    try {
+      await deleteListingPhoto(persisted.id, mediaId);
+      setRemovedMedia((current) => [...current, mediaId]);
+      setPersisted({...persisted, media: persisted.media.filter((media) => media.id !== mediaId)});
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not remove this photo.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const existingPhotos = (persisted?.media ?? []).filter((media) => !removedMedia.includes(media.id));
+
   const inputClass = 'mt-1.5 h-11 w-full rounded-xl bg-[#F4F2EE] px-3.5 text-sm text-[#1E293B] outline-none focus:ring-2 focus:ring-[#F05A4A]/40';
   const labelClass = 'block text-xs font-bold text-[#1E293B]';
   return <section className="mx-auto max-w-3xl rounded-[28px] bg-white p-5 shadow-kinship-1 sm:p-7">
@@ -341,7 +398,7 @@ function ListingForm({cityId, listing, onCancel, onSaved}: {
       <label className={labelClass}>Listing title<input required minLength={6} maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} placeholder="Sunny private room near Indiranagar Metro" /></label>
       <label className={labelClass}>Description<textarea required minLength={30} maxLength={2000} rows={5} value={description} onChange={(e) => setDescription(e.target.value)} className="mt-1.5 w-full rounded-xl bg-[#F4F2EE] p-3.5 text-sm leading-6 text-[#1E293B] outline-none focus:ring-2 focus:ring-[#F05A4A]/40" placeholder="Describe the room, household, and what rent includes." /><span className="mt-1 block text-right text-[11px] font-medium text-[#64748B]">{description.length}/2000</span></label>
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className={labelClass}>City<select value={city} onChange={(e) => setCity(e.target.value as CityId)} className={inputClass}>{Object.values(CITY_THEMES).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label className={labelClass}>City<select value={city} onChange={(e) => {setCity(e.target.value as CityId); setApproximateLocation(null);}} className={inputClass}>{Object.values(CITY_THEMES).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label className={labelClass}>Neighborhood<input required minLength={2} maxLength={100} value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} className={inputClass} placeholder="e.g. HSR Layout" /></label>
         <label className={labelClass}>Home type<select value={listingType} onChange={(e) => setListingType(e.target.value as ListingType)} className={inputClass}>{Object.entries(TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label className={labelClass}>Monthly rent (₹)<input required type="number" min={1000} max={2000000} step={500} value={monthlyRent} onChange={(e) => setMonthlyRent(e.target.value)} className={inputClass} placeholder="18000" /></label>
@@ -349,6 +406,7 @@ function ListingForm({cityId, listing, onCancel, onSaved}: {
         <label className={labelClass}>Available from<input required type="date" min={new Date().toISOString().slice(0, 10)} value={availableFrom} onChange={(e) => setAvailableFrom(e.target.value)} className={inputClass} /></label>
         <label className={labelClass}>Minimum stay<select value={minimumStay} onChange={(e) => setMinimumStay(e.target.value)} className={inputClass}>{[1, 3, 6, 9, 12, 18, 24, 36].map((months) => <option key={months} value={months}>{months} months</option>)}</select></label>
       </div>
+      <ApproximateMapPicker key={city} cityId={city} value={approximateLocation} onChange={setApproximateLocation} />
       <fieldset>
         <legend className={labelClass}>Amenities and household expectations</legend>
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -357,7 +415,16 @@ function ListingForm({cityId, listing, onCancel, onSaved}: {
           </label>)}
         </div>
       </fieldset>
-      <p className="rounded-xl bg-amber-50 px-3.5 py-3 text-xs leading-5 text-amber-900">Photos and video will be added when private media storage is configured. This listing is text-only for now.</p>
+      <fieldset className="space-y-3">
+        <legend className={labelClass}>Listing photos <span className="font-medium text-[#64748B]">({existingPhotos.length + photos.length}/5)</span></legend>
+        <p className="text-xs leading-5 text-[#64748B]">JPEG, PNG, or WebP up to 10 MB each. Photos are private in storage and shown through temporary links.</p>
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-[#F4F2EE] px-4 py-3 text-xs font-bold text-[#1E293B] hover:bg-[#EAE6DF]"><Upload className="h-4 w-4" /> Choose photos<input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy || existingPhotos.length + photos.length >= 5} onChange={(event) => {handlePhotoSelection(event.target.files); event.currentTarget.value = '';}} className="sr-only" /></label>
+        {(existingPhotos.length > 0 || photos.length > 0) && <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {existingPhotos.map((media) => <div key={media.id} className="relative overflow-hidden rounded-xl"><img src={media.url} alt={media.altText || 'Listing photo'} className="h-28 w-full object-cover" /><button type="button" disabled={busy} onClick={() => void removeExistingPhoto(media.id)} aria-label="Remove listing photo" className="absolute right-2 top-2 rounded-full bg-white/95 p-2 text-red-700 shadow disabled:opacity-50"><Trash2 className="h-4 w-4" /></button></div>)}
+          {photos.map((photo, index) => <div key={`${photo.name}-${photo.lastModified}-${index}`} className="relative overflow-hidden rounded-xl"><img src={previews[index]} alt={`Selected photo ${photo.name}`} className="h-28 w-full object-cover" /><button type="button" onClick={() => setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index))} aria-label="Remove selected photo" className="absolute right-2 top-2 rounded-full bg-white/95 p-2 text-red-700 shadow"><Trash2 className="h-4 w-4" /></button><span className="block truncate px-2 py-1 text-[10px] text-slate-600">{photo.name}</span></div>)}
+        </div>}
+      </fieldset>
+      {persisted && photos.length > 0 && <p role="status" className="rounded-xl bg-amber-50 px-3.5 py-3 text-xs leading-5 text-amber-900">Listing details are saved. If an upload fails, your selected photos remain here so you can retry.</p>}
       {error && <p role="alert" className="rounded-xl bg-red-50 px-3.5 py-3 text-sm text-red-700">{error}</p>}
       <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
         <button type="button" onClick={onCancel} className="rounded-xl bg-[#F4F2EE] px-5 py-3 text-sm font-bold text-[#475569]">Cancel</button>

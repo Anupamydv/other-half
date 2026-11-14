@@ -3,7 +3,6 @@ import {
   CITY_THEMES,
   DEFAULT_USER_PROFILE,
   INITIAL_CONVERSATIONS,
-  INITIAL_FEED_POSTS,
   INITIAL_MATCHED_IDS,
   INITIAL_PROFILES,
   INITIAL_SUPER_IDS,
@@ -14,13 +13,10 @@ import {
   ChatMessage,
   CityId,
   Conversation,
-  FeedPost,
   LifestylePreferences,
-  MediaAsset,
   RoommateProfile,
   UserSelfProfile,
 } from '../types';
-import {loadMediaBlobUrl, saveMediaBlob} from '../utils/mediaDb';
 
 const STORAGE_KEY = 'other_half_app_state_v1';
 
@@ -28,7 +24,6 @@ interface PersistedState {
   selectedCity: CityId;
   selectedNeighborhood: string;
   userProfile: UserSelfProfile;
-  feedPosts: FeedPost[];
   passedIds: string[];
   matchedIds: string[];
   superIds: string[];
@@ -45,7 +40,6 @@ function loadInitialState(): PersistedState {
         selectedCity: parsed.selectedCity || 'bengaluru',
         selectedNeighborhood: parsed.selectedNeighborhood || 'All Areas',
         userProfile: parsed.userProfile || DEFAULT_USER_PROFILE,
-        feedPosts: parsed.feedPosts && parsed.feedPosts.length > 0 ? parsed.feedPosts : INITIAL_FEED_POSTS,
         passedIds: parsed.passedIds || [],
         matchedIds: parsed.matchedIds || INITIAL_MATCHED_IDS,
         superIds: parsed.superIds || INITIAL_SUPER_IDS,
@@ -61,7 +55,6 @@ function loadInitialState(): PersistedState {
     selectedCity: 'bengaluru',
     selectedNeighborhood: 'All Areas',
     userProfile: DEFAULT_USER_PROFILE,
-    feedPosts: INITIAL_FEED_POSTS,
     passedIds: [],
     matchedIds: INITIAL_MATCHED_IDS,
     superIds: INITIAL_SUPER_IDS,
@@ -78,7 +71,7 @@ export function useOtherHalfState() {
   >([]);
   const [celebrationProfile, setCelebrationProfile] = useState<RoommateProfile | null>(null);
 
-  // Persist state to localStorage (strip volatile blob URLs if storedBlobKey exists)
+  // Persist temporary display preferences and compatibility state; server-backed domains use the API.
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -86,42 +79,6 @@ export function useOtherHalfState() {
       console.warn('Failed to save state to localStorage:', err);
     }
   }, [state]);
-
-  // Rehydrate user-uploaded media blobs from IndexedDB after reload
-  useEffect(() => {
-    let active = true;
-    const rehydrate = async () => {
-      const postsToHydrate = state.feedPosts.filter((p) =>
-        p.media.some((m) => Boolean(m.storedBlobKey))
-      );
-      if (postsToHydrate.length === 0) return;
-
-      const updated = await Promise.all(
-        state.feedPosts.map(async (post) => {
-          const hasBlob = post.media.some((m) => Boolean(m.storedBlobKey));
-          if (!hasBlob) return post;
-          const hydratedMedia = await Promise.all(
-            post.media.map(async (item) => {
-              if (!item.storedBlobKey) return item;
-              const freshUrl = await loadMediaBlobUrl(item.storedBlobKey);
-              return freshUrl ? {...item, url: freshUrl} : item;
-            })
-          );
-          return {...post, media: hydratedMedia};
-        })
-      );
-
-      if (active) {
-        setState((prev) => ({...prev, feedPosts: updated}));
-      }
-    };
-    rehydrate();
-    return () => {
-      active = false;
-    };
-    // Run once on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const currentCityTheme = useMemo(
     () => CITY_THEMES[state.selectedCity],
@@ -139,115 +96,6 @@ export function useOtherHalfState() {
   const setSelectedNeighborhood = useCallback((neighborhood: string) => {
     setState((prev) => ({...prev, selectedNeighborhood: neighborhood}));
   }, []);
-
-  const toggleLikePost = useCallback((postId: string, forceLike?: boolean) => {
-    setState((prev) => ({
-      ...prev,
-      feedPosts: prev.feedPosts.map((post) => {
-        if (post.id !== postId) return post;
-        const nextLiked = forceLike !== undefined ? forceLike : !post.likedByMe;
-        if (nextLiked === post.likedByMe) return post;
-        return {
-          ...post,
-          likedByMe: nextLiked,
-          likes: nextLiked ? post.likes + 1 : Math.max(0, post.likes - 1),
-        };
-      }),
-    }));
-  }, []);
-
-  const toggleSavePost = useCallback((postId: string) => {
-    setState((prev) => ({
-      ...prev,
-      feedPosts: prev.feedPosts.map((post) =>
-        post.id === postId ? {...post, savedByMe: !post.savedByMe} : post
-      ),
-    }));
-  }, []);
-
-  const addCommentToPost = useCallback((postId: string, text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    setState((prev) => ({
-      ...prev,
-      feedPosts: prev.feedPosts.map((post) => {
-        if (post.id !== postId) return post;
-        return {
-          ...post,
-          comments: [
-            ...post.comments,
-            {
-              id: `c-${Date.now()}`,
-              authorName: prev.userProfile.name,
-              text: trimmed,
-              createdAt: 'Just now',
-            },
-          ],
-        };
-      }),
-    }));
-  }, []);
-
-  const createFeedPost = useCallback(
-    async (input: {
-      cityId: CityId;
-      neighborhood: string;
-      postType: 'Room Available' | 'Looking for Flatmate' | 'City Reel';
-      caption: string;
-      rentPerMonth?: number;
-      flatTitle?: string;
-      flatPosition: {lat: number; lng: number};
-      tags: string[];
-      files: Array<{file: File; kind: 'image' | 'video'}>;
-    }) => {
-      const mediaAssets: MediaAsset[] = [];
-      for (let i = 0; i < input.files.length; i++) {
-        const entry = input.files[i];
-        const blobKey = `blob_${Date.now()}_${i}`;
-        await saveMediaBlob(blobKey, entry.file);
-        const objectUrl = URL.createObjectURL(entry.file);
-        mediaAssets.push({
-          id: `media_${Date.now()}_${i}`,
-          kind: entry.kind,
-          url: objectUrl,
-          storedBlobKey: blobKey,
-        });
-      }
-
-      const newPost: FeedPost = {
-        id: `post-user-${Date.now()}`,
-        authorId: 'self',
-        authorName: state.userProfile.name,
-        authorRole: `${state.userProfile.role} · ${input.neighborhood}`,
-        authorAvatar: state.feedPosts[0]?.authorAvatar || '',
-        verified: true,
-        cityId: input.cityId,
-        neighborhood: input.neighborhood,
-        postType: input.postType,
-        caption: input.caption.trim(),
-        media: mediaAssets,
-        isWalkthroughReel: mediaAssets.some((m) => m.kind === 'video'),
-        likes: 1,
-        likedByMe: true,
-        savedByMe: false,
-        comments: [],
-        createdAt: 'Just now',
-        rentPerMonth: input.rentPerMonth,
-        flatTitle: input.flatTitle || `${input.neighborhood} Flat Share`,
-        flatPosition: input.flatPosition,
-        tags: input.tags,
-      };
-
-      setState((prev) => ({
-        ...prev,
-        selectedCity: input.cityId,
-        selectedNeighborhood: 'All Areas',
-        feedPosts: [newPost, ...prev.feedPosts],
-      }));
-      return newPost;
-    },
-    [state.userProfile.name, state.userProfile.role, state.feedPosts]
-  );
 
   const handleSwipeAction = useCallback(
     (profileId: string, action: 'pass' | 'match' | 'super') => {
@@ -458,7 +306,6 @@ export function useOtherHalfState() {
     currentCityTheme,
     userProfile: state.userProfile,
     profiles,
-    feedPosts: state.feedPosts,
     passedIds: state.passedIds,
     matchedIds: state.matchedIds,
     superIds: state.superIds,
@@ -470,10 +317,6 @@ export function useOtherHalfState() {
     setCelebrationProfile,
     setSelectedCity,
     setSelectedNeighborhood,
-    toggleLikePost,
-    toggleSavePost,
-    addCommentToPost,
-    createFeedPost,
     handleSwipeAction,
     undoLastSwipe,
     resetSwipeDeck,

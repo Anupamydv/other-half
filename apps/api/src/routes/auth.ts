@@ -111,7 +111,7 @@ authRouter.post('/auth/register', asyncRoute(async (request, response) => {
       include: {profile: true},
     });
     setSessionCookie(response, token);
-    response.status(201).json({user: {id: user.id, email: user.email}, profile: serializeProfile(user.profile)});
+    response.status(201).json({user: {id: user.id, email: user.email, isModerator: user.isModerator}, profile: serializeProfile(user.profile)});
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       throw new HttpError(409, 'EMAIL_UNAVAILABLE', 'An account with that email already exists.');
@@ -128,7 +128,7 @@ authRouter.post('/auth/login', asyncRoute(async (request, response) => {
     throw new HttpError(401, 'INVALID_CREDENTIALS', 'Email or password is incorrect.');
   }
   await createSession(user.id, response);
-  response.json({user: {id: user.id, email: user.email}, profile: serializeProfile(user.profile)});
+  response.json({user: {id: user.id, email: user.email, isModerator: user.isModerator}, profile: serializeProfile(user.profile)});
 }));
 
 authRouter.get('/auth/me', requireSession, asyncRoute(async (request, response) => {
@@ -136,7 +136,7 @@ authRouter.get('/auth/me', requireSession, asyncRoute(async (request, response) 
     where: {id: response.locals.sessionUserId as string}, include: {profile: true},
   });
   if (!user) throw new HttpError(401, 'UNAUTHENTICATED', 'Please sign in to continue.');
-  response.json({user: {id: user.id, email: user.email}, profile: serializeProfile(user.profile)});
+  response.json({user: {id: user.id, email: user.email, isModerator: user.isModerator}, profile: serializeProfile(user.profile)});
 }));
 
 authRouter.post('/auth/logout', asyncRoute(async (request, response) => {
@@ -174,6 +174,12 @@ authRouter.patch('/profile/me', requireSession, asyncRoute(async (request, respo
   const parsed = profileUpdateSchema.safeParse(request.body);
   if (!parsed.success) throw new HttpError(400, 'VALIDATION_ERROR', parsed.error.issues[0]?.message ?? 'Invalid profile details.');
   const input = parsed.data;
+  const current = await prisma.profile.findUnique({where: {userId: response.locals.sessionUserId as string}, select: {age: true, discoveryEnabled: true}});
+  const nextAge = input.age !== undefined ? input.age : current?.age;
+  const nextDiscoveryEnabled = input.discoveryEnabled !== undefined ? input.discoveryEnabled : current?.discoveryEnabled;
+  if (nextDiscoveryEnabled && (!nextAge || nextAge < 18)) {
+    throw new HttpError(400, 'AGE_REQUIRED_FOR_DISCOVERY', 'Add your age (18 or older) before enabling roommate discovery.');
+  }
   const profile = await prisma.profile.update({
     where: {userId: response.locals.sessionUserId as string},
     data: {
@@ -183,6 +189,7 @@ authRouter.patch('/profile/me', requireSession, asyncRoute(async (request, respo
       ...(input.cityId !== undefined ? {city: cityToDb[input.cityId]} : {}),
       ...(input.neighborhood !== undefined ? {neighborhood: input.neighborhood} : {}),
       ...(input.bio !== undefined ? {bio: input.bio} : {}),
+      ...(input.discoveryEnabled !== undefined ? {discoveryEnabled: input.discoveryEnabled} : {}),
       ...(input.preferences !== undefined ? {preferences: input.preferences as Prisma.InputJsonValue} : {}),
     },
   });
@@ -191,7 +198,7 @@ authRouter.patch('/profile/me', requireSession, asyncRoute(async (request, respo
 
 function serializeProfile(profile: {
   id: string; displayName: string; age: number | null; role: string | null; city: City;
-  neighborhood: string | null; bio: string; preferences: Prisma.JsonValue;
+  neighborhood: string | null; bio: string; preferences: Prisma.JsonValue; discoveryEnabled: boolean;
 } | null) {
   if (!profile) throw new HttpError(500, 'PROFILE_NOT_FOUND', 'The account profile could not be loaded.');
   const parsedPreferences = profile.preferences
@@ -206,5 +213,6 @@ function serializeProfile(profile: {
     neighborhood: profile.neighborhood,
     bio: profile.bio,
     preferences: parsedPreferences,
+    discoveryEnabled: profile.discoveryEnabled,
   };
 }

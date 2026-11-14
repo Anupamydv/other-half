@@ -11,6 +11,7 @@ import {Prisma, type City, type ListingAmenity, type ListingStatus, type Listing
 import {HttpError, asyncRoute} from '../lib/http.js';
 import {optionalSession, requireSession} from './auth.js';
 import {prisma} from '../lib/prisma.js';
+import {createSignedViewUrl} from '../lib/mediaStorage.js';
 
 const cityToDb: Record<string, City> = {
   bengaluru: 'BENGALURU', mumbai: 'MUMBAI', delhi: 'DELHI_NCR', hyderabad: 'HYDERABAD',
@@ -20,6 +21,7 @@ const cityFromDb: Record<City, 'bengaluru' | 'mumbai' | 'delhi' | 'hyderabad'> =
 };
 const listingInclude = {
   owner: {select: {profile: {select: {displayName: true}}}},
+  media: {where: {status: 'READY'}, orderBy: [{sortOrder: 'asc'}, {createdAt: 'asc'}]},
 } satisfies Prisma.ListingInclude;
 
 export const listingsRouter = Router();
@@ -52,7 +54,7 @@ listingsRouter.get('/listings', optionalSession, asyncRoute(async (request, resp
     : [];
   const savedIds = new Set(savedRows.map((item) => item.listingId));
   response.json({
-    items: items.map((item) => serializeListing(item, savedIds.has(item.id))),
+    items: await Promise.all(items.map((item) => serializeListing(item, savedIds.has(item.id)))),
     nextCursor: hasMore ? items.at(-1)?.id ?? null : null,
   });
 }));
@@ -75,7 +77,7 @@ listingsRouter.get('/listings/mine', requireSession, asyncRoute(async (_request,
   });
   const hasMore = rows.length > limit;
   const items = rows.slice(0, limit);
-  response.json({items: items.map((item) => serializeListing(item, false)), nextCursor: hasMore ? items.at(-1)?.id ?? null : null});
+  response.json({items: await Promise.all(items.map((item) => serializeListing(item, false))), nextCursor: hasMore ? items.at(-1)?.id ?? null : null});
 }));
 
 listingsRouter.get('/listings/saved', requireSession, asyncRoute(async (request, response) => {
@@ -98,7 +100,7 @@ listingsRouter.get('/listings/saved', requireSession, asyncRoute(async (request,
   });
   const hasMore = rows.length > limit;
   const items = rows.slice(0, limit);
-  response.json({items: items.map((row) => serializeListing(row.listing, true)), nextCursor: hasMore ? items.at(-1)?.listingId ?? null : null});
+  response.json({items: await Promise.all(items.map((row) => serializeListing(row.listing, true))), nextCursor: hasMore ? items.at(-1)?.listingId ?? null : null});
 }));
 
 listingsRouter.put('/listings/:id/save', requireSession, asyncRoute(async (request, response) => {
@@ -133,17 +135,18 @@ listingsRouter.get('/listings/:id', optionalSession, asyncRoute(async (request, 
   const saved = userId ? await prisma.savedListing.findUnique({
     where: {userId_listingId: {userId, listingId: listing.id}}, select: {listingId: true},
   }) : null;
-  response.json({item: serializeListing(listing, Boolean(saved))});
+  response.json({item: await serializeListing(listing, Boolean(saved))});
 }));
 
 listingsRouter.post('/listings', requireSession, asyncRoute(async (request, response) => {
   const parsed = listingCreateSchema.safeParse(request.body);
   if (!parsed.success) throw new HttpError(400, 'VALIDATION_ERROR', parsed.error.issues[0]?.message ?? 'Invalid listing details.');
+  assertLocationWithinCity(parsed.data.cityId, parsed.data.approximateLocation);
   const listing = await prisma.listing.create({
     data: toCreateData(parsed.data, response.locals.sessionUserId as string),
     include: listingInclude,
   });
-  response.status(201).json({item: serializeListing(listing, false)});
+  response.status(201).json({item: await serializeListing(listing, false)});
 }));
 
 listingsRouter.patch('/listings/:id', requireSession, asyncRoute(async (request, response) => {
@@ -154,6 +157,7 @@ listingsRouter.patch('/listings/:id', requireSession, asyncRoute(async (request,
   const existing = await prisma.listing.findFirst({where: {id, ownerId}});
   if (!existing) throw new HttpError(404, 'LISTING_NOT_FOUND', 'Listing not found.');
   if (existing.status !== 'ACTIVE') throw new HttpError(409, 'LISTING_ARCHIVED', 'Archived listings cannot be edited.');
+  assertLocationWithinCity(parsed.data.cityId ?? cityFromDb[existing.city], parsed.data.approximateLocation);
 
   const result = await prisma.listing.updateMany({
     where: {id, ownerId, status: 'ACTIVE'},
@@ -161,7 +165,7 @@ listingsRouter.patch('/listings/:id', requireSession, asyncRoute(async (request,
   });
   if (result.count !== 1) throw new HttpError(409, 'LISTING_CHANGED', 'This listing changed. Refresh and try again.');
   const listing = await prisma.listing.findUniqueOrThrow({where: {id}, include: listingInclude});
-  response.json({item: serializeListing(listing, false)});
+  response.json({item: await serializeListing(listing, false)});
 }));
 
 listingsRouter.post('/listings/:id/archive', requireSession, asyncRoute(async (request, response) => {
@@ -173,10 +177,22 @@ listingsRouter.post('/listings/:id/archive', requireSession, asyncRoute(async (r
       data: {status: 'ARCHIVED', archivedAt: new Date()},
     });
     if (archived.count === 1) {
+      const pendingRequests = await transaction.tourRequest.findMany({
+        where: {listingId: id, status: 'PENDING'}, select: {id: true, requesterId: true},
+      });
       await transaction.tourRequest.updateMany({
         where: {listingId: id, status: 'PENDING'},
         data: {status: 'CANCELLED'},
       });
+      if (pendingRequests.length > 0) {
+        await transaction.notification.createMany({data: pendingRequests.map((tourRequest) => ({
+          userId: tourRequest.requesterId,
+          tourRequestId: tourRequest.id,
+          type: 'TOUR_CANCELLED' as const,
+          title: 'Visit request cancelled',
+          body: 'The home listing was archived, so the requested visit was cancelled.',
+        }))});
+      }
     }
     return archived;
   });
@@ -201,6 +217,8 @@ function toCreateData(input: ListingInput, ownerId: string) {
     availableFrom: new Date(`${input.availableFrom}T00:00:00.000Z`),
     minimumStay: input.minimumStay,
     amenities: input.amenities as ListingAmenity[],
+    approximateLatitude: input.approximateLocation ? roundCoordinate(input.approximateLocation.latitude) : null,
+    approximateLongitude: input.approximateLocation ? roundCoordinate(input.approximateLocation.longitude) : null,
   };
 }
 
@@ -216,10 +234,14 @@ function toUpdateData(input: Partial<ListingInput>) {
     ...(input.availableFrom !== undefined ? {availableFrom: new Date(`${input.availableFrom}T00:00:00.000Z`)} : {}),
     ...(input.minimumStay !== undefined ? {minimumStay: input.minimumStay} : {}),
     ...(input.amenities !== undefined ? {amenities: input.amenities as ListingAmenity[]} : {}),
+    ...(input.approximateLocation !== undefined ? {
+      approximateLatitude: input.approximateLocation ? roundCoordinate(input.approximateLocation.latitude) : null,
+      approximateLongitude: input.approximateLocation ? roundCoordinate(input.approximateLocation.longitude) : null,
+    } : {}),
   };
 }
 
-function serializeListing(listing: Prisma.ListingGetPayload<{include: typeof listingInclude}>, savedByMe: boolean) {
+async function serializeListing(listing: Prisma.ListingGetPayload<{include: typeof listingInclude}>, savedByMe: boolean) {
   return {
     id: listing.id,
     ownerId: listing.ownerId,
@@ -238,7 +260,36 @@ function serializeListing(listing: Prisma.ListingGetPayload<{include: typeof lis
     updatedAt: listing.updatedAt.toISOString(),
     ownerDisplayName: listing.owner.profile?.displayName ?? 'Other Half member',
     savedByMe,
+    media: await Promise.all(listing.media.map(async (item) => ({
+      id: item.id, url: await createSignedViewUrl(item.objectKey), contentType: item.contentType,
+      byteSize: item.byteSize, altText: item.altText,
+    }))),
+    approximateLocation: listing.approximateLatitude === null || listing.approximateLongitude === null
+      ? null
+      : {latitude: listing.approximateLatitude, longitude: listing.approximateLongitude},
   };
+}
+
+function roundCoordinate(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function assertLocationWithinCity(cityId: 'bengaluru' | 'mumbai' | 'delhi' | 'hyderabad', location: {latitude: number; longitude: number} | null | undefined) {
+  if (!location) return;
+  const centers = {
+    bengaluru: {latitude: 12.9716, longitude: 77.5946},
+    mumbai: {latitude: 19.0596, longitude: 72.8295},
+    delhi: {latitude: 28.5672, longitude: 77.21},
+    hyderabad: {latitude: 17.4326, longitude: 78.4071},
+  };
+  const center = centers[cityId];
+  const radians = Math.PI / 180;
+  const latDelta = (location.latitude - center.latitude) * radians;
+  const lngDelta = (location.longitude - center.longitude) * radians;
+  const haversine = Math.sin(latDelta / 2) ** 2 +
+    Math.cos(center.latitude * radians) * Math.cos(location.latitude * radians) * Math.sin(lngDelta / 2) ** 2;
+  const distanceKm = 6_371 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+  if (distanceKm > 150) throw new HttpError(400, 'LOCATION_OUTSIDE_CITY', 'Choose a map pin within the selected city area.');
 }
 
 async function assertCursor(cursor: string | undefined, ownerId?: string) {

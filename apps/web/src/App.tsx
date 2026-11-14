@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import {CityLandmarkStrip} from './components/CityLandmarkStrip';
 import {ApiStatus} from './components/ApiStatus';
+import {NotificationBell} from './components/NotificationBell';
 import {AuthScreen} from './components/AuthScreen';
 import {CITY_THEMES} from './data/indiaData';
 import {useOtherHalfState} from './hooks/useOtherHalfState';
@@ -20,7 +21,6 @@ import {
   AppTab,
   CityId,
   ExploreMode,
-  FeedPost,
   LandmarkPlace,
   RoommateProfile,
 } from './types';
@@ -31,11 +31,11 @@ const GoogleMapsNavigator = lazy(() =>
 const FeedView = lazy(() =>
   import('./components/FeedView').then((module) => ({default: module.FeedView}))
 );
-const SwipeDeckView = lazy(() =>
-  import('./components/SwipeDeckView').then((module) => ({default: module.SwipeDeckView}))
+const DiscoveryView = lazy(() =>
+  import('./components/DiscoveryView').then((module) => ({default: module.DiscoveryView}))
 );
-const MatchesView = lazy(() =>
-  import('./components/MatchesView').then((module) => ({default: module.MatchesView}))
+const RealMatchesView = lazy(() =>
+  import('./components/RealMatchesView').then((module) => ({default: module.RealMatchesView}))
 );
 const ConversationsView = lazy(() =>
   import('./components/ConversationsView').then((module) => ({default: module.ConversationsView}))
@@ -43,20 +43,23 @@ const ConversationsView = lazy(() =>
 const ProfileQuizView = lazy(() =>
   import('./components/ProfileQuizView').then((module) => ({default: module.ProfileQuizView}))
 );
+const ProfileSafetySettings = lazy(() =>
+  import('./components/ProfileSafetySettings').then((module) => ({default: module.ProfileSafetySettings}))
+);
+const ModeratorQueueView = lazy(() =>
+  import('./components/ModeratorQueueView').then((module) => ({default: module.ModeratorQueueView}))
+);
 const ListingsView = lazy(() =>
   import('./components/ListingsView').then((module) => ({default: module.ListingsView}))
+);
+const ListingMapNavigator = lazy(() =>
+  import('./components/ListingMapNavigator').then((module) => ({default: module.ListingMapNavigator}))
 );
 const ToursView = lazy(() =>
   import('./components/ToursView').then((module) => ({default: module.ToursView}))
 );
-const CreatePostModal = lazy(() =>
-  import('./components/CreatePostModal').then((module) => ({default: module.CreatePostModal}))
-);
 const DetailAndTourModal = lazy(() =>
   import('./components/DetailAndTourModal').then((module) => ({default: module.DetailAndTourModal}))
-);
-const MatchCelebrationModal = lazy(() =>
-  import('./components/MatchCelebrationModal').then((module) => ({default: module.MatchCelebrationModal}))
 );
 
 export default function App() {
@@ -66,23 +69,8 @@ export default function App() {
     currentCityTheme,
     userProfile,
     profiles,
-    feedPosts,
-    passedIds,
-    matchedIds,
-    superIds,
-    bookedTours,
-    canUndoSwipe,
-    celebrationProfile,
-    setCelebrationProfile,
     setSelectedCity,
     setSelectedNeighborhood,
-    toggleLikePost,
-    toggleSavePost,
-    addCommentToPost,
-    createFeedPost,
-    handleSwipeAction,
-    undoLastSwipe,
-    resetSwipeDeck,
     bookHouseTour,
     updateUserPreferences,
     updateUserProfileDetails,
@@ -142,6 +130,13 @@ export default function App() {
     }
   };
 
+  const handleAccountDeleted = () => {
+    setAccount(null);
+    setSessionStatus('anonymous');
+    setSessionMessage('');
+    setActiveTab('explore');
+  };
+
   const saveProfileDetails = async (updates: Partial<Omit<import('./types').UserSelfProfile, 'preferences'>>) => {
     const payload = {
       ...(updates.name !== undefined ? {displayName: updates.name} : {}),
@@ -155,6 +150,7 @@ export default function App() {
       method: 'PATCH', body: JSON.stringify(payload),
     });
     updateUserProfileDetails(updates);
+    if (updates.cityId) setSelectedCity(updates.cityId);
     if (account) setAccount({...account, profile: result.profile});
   };
 
@@ -163,6 +159,13 @@ export default function App() {
       method: 'PATCH', body: JSON.stringify({preferences}),
     });
     updateUserPreferences(result.profile.preferences);
+    if (account) setAccount({...account, profile: result.profile});
+  };
+
+  const saveDiscoveryEnabled = async (discoveryEnabled: boolean) => {
+    const result = await apiRequest<{profile: AccountResponse['profile']}>('/profile/me', {
+      method: 'PATCH', body: JSON.stringify({discoveryEnabled}),
+    });
     if (account) setAccount({...account, profile: result.profile});
   };
 
@@ -177,7 +180,6 @@ export default function App() {
   const [selectedFlatId, setSelectedFlatId] = useState<string | null>(null);
   const [focusedLandmark, setFocusedLandmark] = useState<LandmarkPlace | null>(null);
   const [detailProfile, setDetailProfile] = useState<RoommateProfile | null>(null);
-  const [showCreatePost, setShowCreatePost] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [interactionNotice, setInteractionNotice] = useState('');
   // Filtered city flats/profiles
@@ -205,48 +207,10 @@ export default function App() {
     setFocusedLandmark(null);
   }, [cityProfiles, selectedFlatId]);
 
-  const swipeDeckProfiles = useMemo(
-    () =>
-      cityProfiles.filter(
-        (p) => !passedIds.includes(p.id) && !matchedIds.includes(p.id)
-      ),
-    [cityProfiles, passedIds, matchedIds]
-  );
-
-  const cityPosts = useMemo(() => {
-    return feedPosts.filter((post) => {
-      if (post.cityId !== selectedCity) return false;
-      if (
-        selectedNeighborhood !== 'All Areas' &&
-        post.neighborhood !== selectedNeighborhood
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [feedPosts, selectedCity, selectedNeighborhood]);
-
-  const savedPosts = useMemo(
-    () => feedPosts.filter((p) => p.savedByMe),
-    [feedPosts]
-  );
-
   const handleNavigateToProfile = (profile: RoommateProfile) => {
     setSelectedCity(profile.cityId);
     setSelectedNeighborhood('All Areas');
     setSelectedFlatId(profile.id);
-    setFocusedLandmark(null);
-    if (window.innerWidth < 1024 || activeTab !== 'explore') {
-      setActiveTab('map');
-    }
-  };
-
-  const handleNavigateToPost = (post: FeedPost) => {
-    setSelectedCity(post.cityId);
-    setSelectedNeighborhood('All Areas');
-    if (post.linkedProfileId) {
-      setSelectedFlatId(post.linkedProfileId);
-    }
     setFocusedLandmark(null);
     if (window.innerWidth < 1024 || activeTab !== 'explore') {
       setActiveTab('map');
@@ -258,15 +222,6 @@ export default function App() {
     if (window.innerWidth < 1024) {
       setActiveTab('map');
     }
-  };
-
-  const handleOpenChat = (_profileId: string) => {
-    setInteractionNotice('Sample roommate matches do not have real accounts yet. A private chat becomes available after a home visit is confirmed.');
-  };
-
-  const handleSendIcebreaker = (_profileId: string, _text: string) => {
-    setCelebrationProfile(null);
-    handleOpenChat(_profileId);
   };
 
   const handleOpenTourConversation = (conversationId: string) => {
@@ -309,7 +264,7 @@ export default function App() {
                 {id: 'listings', label: 'Homes'},
                 {id: 'map', label: 'Live Map'},
                 {id: 'tours', label: 'Tours'},
-                {id: 'matches', label: `Matches (${matchedIds.length})`},
+                {id: 'matches', label: 'Matches'},
                 {
                   id: 'messages',
                   label: 'Messages',
@@ -337,6 +292,7 @@ export default function App() {
 
           {/* Zone 3: Single Primary Action */}
           <div className="flex items-center shrink-0">
+            <NotificationBell onOpenTours={() => setActiveTab('tours')} />
             <ApiStatus />
             <span className="hidden lg:inline max-w-36 truncate px-3 text-xs font-semibold text-[#64748B]" title={account.user.email}>{account.user.email}</span>
             <button type="button" onClick={() => void handleSignOut()} aria-label="Sign out" title="Sign out" className="mr-2 rounded-full p-2 text-[#64748B] hover:bg-[#F4F2EE] hover:text-[#1E293B]"><LogOut className="h-4 w-4" /></button>
@@ -354,7 +310,7 @@ export default function App() {
 
       <div className="mx-auto mt-3 max-w-[1240px] px-4 sm:px-6 lg:px-10">
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs leading-5 text-amber-900">
-          Homes, Tours, and Messages use saved API data. Roommate cards and matches are sample content; chats start after a confirmed home visit.
+          Homes and commute pins use saved listing data and privacy-rounded locations. The community feed and roommate discovery currently include sample content.
         </p>
         {interactionNotice && <div role="status" className="mt-2 flex items-start justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-xs leading-5 text-sky-900"><span>{interactionNotice}</span><button aria-label="Dismiss" onClick={() => setInteractionNotice('')} className="font-bold">×</button></div>}
       </div>
@@ -399,7 +355,7 @@ export default function App() {
                         : 'text-[#64748B] hover:text-[#1E293B]'
                     }`}
                   >
-                    Scroll Feed
+                    Community Feed
                   </button>
                   <button
                     type="button"
@@ -410,7 +366,7 @@ export default function App() {
                         : 'text-[#64748B] hover:text-[#1E293B]'
                     }`}
                   >
-                    Swipe Deck
+                    Find Roommates
                   </button>
                 </div>
               )}
@@ -452,33 +408,17 @@ export default function App() {
                 {exploreMode === 'feed' ? (
                   <Suspense fallback={<div className="rounded-3xl bg-white p-8 text-center text-sm text-[#64748B]">Loading community feed…</div>}>
                     <FeedView
-                      posts={cityPosts}
                       city={currentCityTheme}
-                      profiles={profiles}
-                      matchedIds={matchedIds}
-                      userPrefs={userProfile.preferences}
-                      onToggleLike={toggleLikePost}
-                      onToggleSave={toggleSavePost}
-                      onAddComment={addCommentToPost}
-                      onNavigateToFlat={handleNavigateToPost}
-                      onOpenDetail={(prof) => setDetailProfile(prof)}
-                      onQuickMatch={(id) => handleSwipeAction(id, 'match')}
-                      onOpenCreatePost={() => setShowCreatePost(true)}
+                      cityId={selectedCity}
+                      neighborhood={selectedNeighborhood}
+                      userId={account.user.id}
                     />
                   </Suspense>
                 ) : (
                   <Suspense fallback={<div className="rounded-3xl bg-white p-8 text-center text-sm text-[#64748B]">Loading roommate discovery…</div>}>
-                    <SwipeDeckView
-                      profiles={swipeDeckProfiles}
-                      city={currentCityTheme}
-                      userPrefs={userProfile.preferences}
-                      canUndo={canUndoSwipe}
-                      onSwipe={handleSwipeAction}
-                      onUndo={undoLastSwipe}
-                      onResetDeck={resetSwipeDeck}
-                      onOpenDetail={(prof) => setDetailProfile(prof)}
-                      onNavigate={handleNavigateToProfile}
-                    />
+                    <DiscoveryView cityId={selectedCity} userPrefs={userProfile.preferences}
+                      onOpenProfileSettings={() => setActiveTab('profile')}
+                      onOpenConversation={handleOpenTourConversation} />
                   </Suspense>
                 )}
               </div>
@@ -504,19 +444,8 @@ export default function App() {
         {/* FULL MAP TAB */}
         {activeTab === 'map' && (
           <div className="space-y-5">
-            <CityLandmarkStrip
-              city={currentCityTheme}
-              onFocusLandmark={handleFocusLandmark}
-            />
-            <Suspense fallback={<div className="h-[440px] rounded-2xl bg-white animate-pulse" aria-label="Loading map" />}>
-              <GoogleMapsNavigator
-                city={currentCityTheme}
-                flats={cityProfiles}
-                selectedFlatId={selectedFlatId}
-                onSelectFlat={(flat) => setSelectedFlatId(flat.id)}
-                onOpenFlatDetail={(flat) => setDetailProfile(flat)}
-                focusedLandmark={focusedLandmark}
-              />
+            <Suspense fallback={<div className="h-[440px] rounded-2xl bg-white animate-pulse" aria-label="Loading housing map" />}>
+              <ListingMapNavigator cityId={selectedCity} neighborhood={selectedNeighborhood} onBrowseHomes={() => setActiveTab('listings')} />
             </Suspense>
           </div>
         )}
@@ -536,18 +465,7 @@ export default function App() {
         {/* MATCHES TAB */}
         {activeTab === 'matches' && (
           <Suspense fallback={<div className="rounded-3xl bg-white p-8 text-center text-sm text-[#64748B]">Loading matches…</div>}>
-            <MatchesView
-              profiles={profiles}
-              matchedIds={matchedIds}
-              superIds={superIds}
-              bookedTours={bookedTours}
-              savedPosts={savedPosts}
-              userPrefs={userProfile.preferences}
-              onOpenChat={handleOpenChat}
-              onOpenDetail={(prof) => setDetailProfile(prof)}
-              onNavigateToProfile={handleNavigateToProfile}
-              onNavigateToPost={handleNavigateToPost}
-            />
+            <RealMatchesView userPrefs={userProfile.preferences} onOpenConversation={handleOpenTourConversation} />
           </Suspense>
         )}
 
@@ -565,11 +483,13 @@ export default function App() {
               userProfile={userProfile}
               onUpdatePreferences={savePreferences}
               onUpdateDetails={saveProfileDetails}
+              discoveryEnabled={account.profile.discoveryEnabled}
+              onUpdateDiscoveryEnabled={saveDiscoveryEnabled}
               onChangePassword={changePassword}
-              onResetSwipeDeck={resetSwipeDeck}
             />
           </Suspense>
         )}
+        {activeTab === 'profile' && <Suspense fallback={null}><ProfileSafetySettings onAccountDeleted={handleAccountDeleted} />{account.user.isModerator && <ModeratorQueueView />}</Suspense>}
       </main>
 
       {/* Mobile Floating Navigation Dock (< 15% Viewport Height) */}
@@ -610,47 +530,22 @@ export default function App() {
         })}
       </nav>
 
-      {/* Create Post Modal */}
-      {showCreatePost && (
-        <Suspense fallback={null}>
-          <CreatePostModal
-            defaultCity={selectedCity}
-            onClose={() => setShowCreatePost(false)}
-            onPublish={async (input) => {
-              await createFeedPost(input);
-              setActiveTab('explore');
-              setExploreMode('feed');
-            }}
-          />
-        </Suspense>
-      )}
-
       {/* Roommate / Flat Detail, Split Rent & Tour Booking Modal */}
       {detailProfile && (
         <Suspense fallback={null}>
           <DetailAndTourModal
             profile={detailProfile}
             userPrefs={userProfile.preferences}
-            isMatched={matchedIds.includes(detailProfile.id)}
+            isMatched={false}
+            bookingDisabled
             onClose={() => setDetailProfile(null)}
-            onMatch={(id) => handleSwipeAction(id, 'match')}
+            onMatch={() => setInteractionNotice('This map profile is sample content. Use Find Roommates to connect with real members.')}
             onNavigateToFlat={handleNavigateToProfile}
             onBookTour={bookHouseTour}
           />
         </Suspense>
       )}
 
-      {/* Match Celebration Modal */}
-      {celebrationProfile && (
-        <Suspense fallback={null}>
-          <MatchCelebrationModal
-            profile={celebrationProfile}
-            userPrefs={userProfile.preferences}
-            onClose={() => setCelebrationProfile(null)}
-            onSendIcebreaker={handleSendIcebreaker}
-          />
-        </Suspense>
-      )}
     </div>
   );
 }

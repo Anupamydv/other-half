@@ -9,6 +9,7 @@ Browser (React/Vite)
 Express API ───── PostgreSQL (Prisma)
         │
         ├──── Object storage for user media
+        ├──── Redis for atomic shared auth/account rate limits
         ├──── Email provider for verification and recovery
         └──── Google Maps browser SDK (restricted public key)
 ```
@@ -26,7 +27,7 @@ We are starting with a modular monolith. Housing discovery, profiles, matching, 
 
 ## Initial domain model
 
-`User` is the authentication identity. `Profile` is editable product information with a one-to-one user relation. `Listing` belongs to one user and stores a neighborhood-level location, rent, availability, amenities, and household details; exact street addresses are not collected. `SavedListing` is a user/listing join record so saved homes persist across sessions and devices. `TourRequest` links a guest to a listing and records a requested visit window and its owner-controlled status. `Conversation` is unique per listing/owner/guest and can only be opened from a confirmed visit. `ConversationMessage` stores bounded text messages; participants alone can read and send. Per-participant read timestamps power inbox unread state, and `UserBlock` prevents further contact while retaining existing history. Listing media will be added through private object storage after a provider is configured. Sensitive identity and moderation data remain separate from public profile and listing fields.
+`User` is the authentication identity. `Profile` is editable product information with a one-to-one user relation and an explicit discovery opt-in. `DiscoveryAction` records one pass/like/super-like per member pair. `Match` is a normalized pair created only when both members like each other; it opens one private match conversation. `UserBlock` hides members from discovery, the community feed, and new messages while preserving history. `UserReport` stores private safety reports; only moderators can see the review queue and change report status. `CommunityPost` stores bounded text updates by city and neighborhood; likes and saves are unique member/post joins, and comments are persisted separately. Community post reads require a session, and blocked authors are filtered from results. `Listing` belongs to one user and stores neighborhood-level location, rent, availability, amenities, and household details; exact street addresses are not collected. Optional listing pins are rounded to two decimal places by the API before persistence and never expose the exact clicked coordinate. `SavedListing` is a user/listing join record so saved homes persist across sessions and devices. `ListingMedia` tracks private object keys and only becomes visible after an upload is verified. The API issues temporary signed upload/read URLs, limits listings to five JPEG/PNG/WebP images up to 10 MB each, and checks the stored size, content type, and file signature. `TourRequest` links a guest to a listing and records a requested visit window and its owner-controlled status. `Notification` stores user-scoped in-app updates for visit request lifecycle events and is created in the same transaction as the corresponding status change. Conversations can originate from a listing visit or mutual roommate match. `ConversationMessage` stores bounded text messages; participants alone can read and send. Per-participant read timestamps power inbox unread state. Sensitive identity and moderation data remain separate from public profile and listing fields.
 
 ## Reliability and security baseline
 
@@ -34,7 +35,10 @@ We are starting with a modular monolith. Housing discovery, profiles, matching, 
 - Helmet sets standard HTTP security headers; CORS is restricted to the configured web origin; request bodies have a size limit.
 - Production sessions will use secure, HTTP-only, same-site cookies and server-side revocation. Passwords will use a deliberately slow password hash; raw credentials never enter logs.
 - Every endpoint that changes data will validate input, authenticate the caller, authorize the target resource, and use database constraints/transactions where needed.
-- Migrations, secrets, backups, structured logs, rate limits, monitoring, and deployment automation are required before public launch.
+- Members can download an authenticated JSON export of their profile and account activity. Password hashes, session tokens, and unrelated members’ private profiles are excluded; exported listing-photo links are temporary.
+- Migrations, secrets, backups, structured logs, shared Redis rate limits, monitoring, and deployment automation are required before public launch. Production startup requires Redis; local development can use an explicitly degraded process-local fallback.
+- GitHub Actions runs locked dependency installation, workspace typechecking, production builds, and Prisma schema validation on pull requests and pushes to `main`.
+- The shared contracts package is compiled before workspace builds, and the API build packages its generated Prisma Client into `dist`; runtime containers must run the compiled API with production environment variables rather than the development TypeScript loader.
 
 ## Repository layout
 

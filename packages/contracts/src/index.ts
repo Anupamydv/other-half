@@ -2,7 +2,7 @@ import {z} from 'zod';
 
 export const healthResponseSchema = z.object({
   status: z.enum(['ok', 'degraded']),
-  checks: z.object({database: z.enum(['ok', 'unavailable'])}),
+  checks: z.object({database: z.enum(['ok', 'unavailable']), rateLimitStorage: z.enum(['shared', 'local-fallback', 'unavailable'])}),
   timestamp: z.iso.datetime(),
 });
 
@@ -49,6 +49,7 @@ export const profileUpdateSchema = z.object({
   neighborhood: z.string().trim().max(100).nullable().optional(),
   bio: z.string().trim().max(500).optional(),
   preferences: lifestylePreferencesSchema.optional(),
+  discoveryEnabled: z.boolean().optional(),
 }).refine((value) => Object.keys(value).length > 0, 'Provide at least one profile field.');
 
 export type LifestylePreferences = z.infer<typeof lifestylePreferencesSchema>;
@@ -56,6 +57,12 @@ export type RegisterInput = z.infer<typeof registerInputSchema>;
 export type LoginInput = z.infer<typeof loginInputSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordInputSchema>;
 export type ProfileUpdate = z.infer<typeof profileUpdateSchema>;
+
+export const deleteAccountInputSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+  confirmation: z.literal('DELETE MY ACCOUNT'),
+});
+export type DeleteAccountInput = z.infer<typeof deleteAccountInputSchema>;
 
 export const listingTypeSchema = z.enum(['PRIVATE_ROOM', 'SHARED_ROOM', 'ENTIRE_FLAT']);
 export const listingAmenitySchema = z.enum([
@@ -79,6 +86,10 @@ export const listingCreateSchema = z.object({
   minimumStay: z.number().int().min(1).max(36),
   amenities: z.array(listingAmenitySchema).max(7)
     .refine((amenities) => new Set(amenities).size === amenities.length, 'Remove duplicate amenities.'),
+  approximateLocation: z.object({
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+  }).nullable().default(null),
 });
 
 export const listingUpdateSchema = listingCreateSchema.partial()
@@ -126,6 +137,8 @@ export const listingDtoSchema = z.object({
   updatedAt: z.iso.datetime(),
   ownerDisplayName: z.string(),
   savedByMe: z.boolean(),
+  media: z.array(z.object({id: z.string(), url: z.url(), contentType: z.string(), byteSize: z.number().int().positive(), altText: z.string()})),
+  approximateLocation: z.object({latitude: z.number(), longitude: z.number()}).nullable(),
 });
 export const listingPageSchema = z.object({items: z.array(listingDtoSchema), nextCursor: z.string().nullable()});
 
@@ -134,6 +147,45 @@ export type ListingAmenity = z.infer<typeof listingAmenitySchema>;
 export type ListingInput = z.infer<typeof listingCreateSchema>;
 export type ListingUpdate = z.infer<typeof listingUpdateSchema>;
 export type ListingDto = z.infer<typeof listingDtoSchema>;
+
+export const listingMediaUploadSchema = z.object({
+  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  byteSize: z.number().int().min(1).max(10 * 1024 * 1024),
+  altText: z.string().trim().max(200).default(''),
+});
+export const listingMediaUploadResponseSchema = z.object({mediaId: z.string(), uploadUrl: z.url(), expiresInSeconds: z.number().int().positive()});
+
+export const communityPostTypeSchema = z.enum(['ROOM_AVAILABLE', 'LOOKING_FOR_FLATMATE', 'GENERAL']);
+export const communityPostCreateSchema = z.object({
+  cityId: cityIdSchema,
+  neighborhood: z.string().trim().min(2).max(100),
+  postType: communityPostTypeSchema,
+  caption: z.string().trim().min(10).max(2000),
+  rentPerMonth: z.number().int().min(1000).max(2_000_000).nullable().default(null),
+  flatTitle: z.string().trim().min(3).max(120).nullable().default(null),
+  tags: z.array(z.string().trim().min(1).max(30)).max(4).default([]),
+});
+export const communityPostQuerySchema = z.object({
+  cityId: cityIdSchema,
+  neighborhood: z.string().trim().min(2).max(100).optional(),
+  savedOnly: z.enum(['true', 'false']).transform((value) => value === 'true').default(false),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  cursor: z.string().min(1).max(64).optional(),
+});
+export const communityPostDtoSchema = z.object({
+  id: z.string(), authorId: z.string(), authorDisplayName: z.string(), cityId: cityIdSchema,
+  neighborhood: z.string(), postType: communityPostTypeSchema, caption: z.string(),
+  rentPerMonth: z.number().int().nullable(), flatTitle: z.string().nullable(), tags: z.array(z.string()),
+  likeCount: z.number().int().nonnegative(), commentCount: z.number().int().nonnegative(),
+  likedByMe: z.boolean(), savedByMe: z.boolean(), createdAt: z.iso.datetime(),
+  comments: z.array(z.object({id: z.string(), authorId: z.string(), authorDisplayName: z.string(), body: z.string(), createdAt: z.iso.datetime()})),
+});
+export const communityPostPageSchema = z.object({items: z.array(communityPostDtoSchema), nextCursor: z.string().nullable()});
+export const communityCommentCreateSchema = z.object({body: z.string().trim().min(1).max(1000)});
+export const communityCommentQuerySchema = z.object({limit: z.coerce.number().int().min(1).max(50).default(20), cursor: z.string().min(1).max(64).optional()});
+export type CommunityPostInput = z.infer<typeof communityPostCreateSchema>;
+export type CommunityPostDto = z.infer<typeof communityPostDtoSchema>;
+export type CommunityPostType = z.infer<typeof communityPostTypeSchema>;
 
 export const tourTimeSlotSchema = z.enum(['MORNING', 'AFTERNOON', 'EVENING']);
 export const tourRequestStatusSchema = z.enum(['PENDING', 'CONFIRMED', 'DECLINED', 'CANCELLED']);
@@ -193,10 +245,64 @@ export const conversationMessageSchema = z.object({
 });
 export const conversationMessagePageSchema = z.object({items: z.array(conversationMessageSchema), nextCursor: z.string().nullable()});
 export const conversationDtoSchema = z.object({
-  id: z.string(), listingId: z.string(), listingTitle: z.string(), cityId: cityIdSchema, neighborhood: z.string(),
+  id: z.string(), listingId: z.string().nullable(), listingTitle: z.string(), cityId: cityIdSchema, neighborhood: z.string(),
   peerId: z.string(), peerDisplayName: z.string(), lastMessage: conversationMessageSchema.nullable(),
   lastMessageAt: z.iso.datetime(), unread: z.boolean(), blockedByMe: z.boolean(), blockedByPeer: z.boolean(),
 });
 export const conversationPageSchema = z.object({items: z.array(conversationDtoSchema)});
 export type ConversationDto = z.infer<typeof conversationDtoSchema>;
 export type ConversationMessageDto = z.infer<typeof conversationMessageSchema>;
+
+export const notificationTypeSchema = z.enum(['TOUR_REQUESTED', 'TOUR_CONFIRMED', 'TOUR_DECLINED', 'TOUR_CANCELLED']);
+export const notificationDtoSchema = z.object({
+  id: z.string(), type: notificationTypeSchema, title: z.string(), body: z.string(),
+  tourRequestId: z.string(), createdAt: z.iso.datetime(), readAt: z.iso.datetime().nullable(),
+});
+export const notificationListSchema = z.object({items: z.array(notificationDtoSchema), unreadCount: z.number().int().nonnegative()});
+export type NotificationDto = z.infer<typeof notificationDtoSchema>;
+
+export const discoveryActionTypeSchema = z.enum(['PASS', 'LIKE', 'SUPER_LIKE']);
+export const discoveryQuerySchema = z.object({
+  cityId: cityIdSchema,
+  limit: z.coerce.number().int().min(1).max(30).default(15),
+  cursor: z.string().min(1).max(64).optional(),
+});
+export const discoveryActionSchema = z.object({
+  targetUserId: z.string().trim().min(1).max(64),
+  action: discoveryActionTypeSchema,
+});
+export const publicProfileSchema = z.object({
+  id: z.string(), displayName: z.string(), age: z.number().int().nullable(), role: z.string().nullable(),
+  cityId: cityIdSchema, neighborhood: z.string().nullable(), bio: z.string(), preferences: lifestylePreferencesSchema,
+});
+export const discoveryPageSchema = z.object({
+  items: z.array(publicProfileSchema), nextCursor: z.string().nullable(), discoveryEnabled: z.boolean(),
+});
+export const matchDtoSchema = z.object({
+  id: z.string(), conversationId: z.string(), createdAt: z.iso.datetime(), profile: publicProfileSchema,
+});
+export const matchPageSchema = z.object({items: z.array(matchDtoSchema)});
+export const discoveryActionResponseSchema = z.object({
+  action: discoveryActionTypeSchema, matched: z.boolean(), conversationId: z.string().nullable(),
+});
+export type PublicProfileDto = z.infer<typeof publicProfileSchema>;
+export type MatchDto = z.infer<typeof matchDtoSchema>;
+
+export const reportReasonSchema = z.enum(['HARASSMENT', 'SCAM', 'INAPPROPRIATE', 'FAKE_PROFILE', 'OTHER']);
+export const reportStatusSchema = z.enum(['OPEN', 'IN_REVIEW', 'RESOLVED', 'DISMISSED']);
+export const createReportSchema = z.object({reason: reportReasonSchema, details: z.string().trim().max(1000).default('')});
+export const updateReportStatusSchema = z.object({status: z.enum(['IN_REVIEW', 'RESOLVED', 'DISMISSED'])});
+export const userReportDtoSchema = z.object({
+  id: z.string(), reportedUserId: z.string(), reportedDisplayName: z.string(), reason: reportReasonSchema,
+  details: z.string(), status: reportStatusSchema, createdAt: z.iso.datetime(), reviewedAt: z.iso.datetime().nullable(),
+});
+export const moderationReportDtoSchema = userReportDtoSchema.extend({
+  reporterId: z.string(), reporterDisplayName: z.string(),
+});
+export const reportListSchema = z.object({items: z.array(moderationReportDtoSchema)});
+export const myReportsSchema = z.object({items: z.array(userReportDtoSchema)});
+export const blockedUserSchema = z.object({userId: z.string(), displayName: z.string(), cityId: cityIdSchema, blockedAt: z.iso.datetime()});
+export const blockedUsersSchema = z.object({items: z.array(blockedUserSchema)});
+export type UserReportDto = z.infer<typeof userReportDtoSchema>;
+export type ModerationReportDto = z.infer<typeof moderationReportDtoSchema>;
+export type BlockedUserDto = z.infer<typeof blockedUserSchema>;

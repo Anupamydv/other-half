@@ -30,7 +30,7 @@ tourRequestsRouter.post('/listings/:id/tour-requests', requireSession, asyncRout
     await transaction.$queryRaw`SELECT "id" FROM "Listing" WHERE "id" = ${listingId} FOR UPDATE`;
     const listing = await transaction.listing.findFirst({
       where: {id: listingId, status: 'ACTIVE'},
-      select: {id: true, ownerId: true, availableFrom: true},
+      select: {id: true, ownerId: true, title: true, availableFrom: true},
     });
     if (!listing) throw new HttpError(404, 'LISTING_NOT_FOUND', 'This listing is not available.');
     if (listing.ownerId === requesterId) throw new HttpError(400, 'OWN_LISTING', 'You cannot request a visit for your own listing.');
@@ -47,7 +47,7 @@ tourRequestsRouter.post('/listings/:id/tour-requests', requireSession, asyncRout
       select: {id: true},
     });
     if (existing) throw new HttpError(409, 'REQUEST_ALREADY_PENDING', 'You already have a pending request for that visit window.');
-    return transaction.tourRequest.create({
+    const created = await transaction.tourRequest.create({
       data: {
         listingId,
         requesterId,
@@ -57,6 +57,15 @@ tourRequestsRouter.post('/listings/:id/tour-requests', requireSession, asyncRout
       },
       include: tourInclude,
     });
+    const requester = await transaction.profile.findUnique({where: {userId: requesterId}, select: {displayName: true}});
+    await transaction.notification.create({data: {
+      userId: listing.ownerId,
+      tourRequestId: created.id,
+      type: 'TOUR_REQUESTED',
+      title: 'New home visit request',
+      body: `${requester?.displayName ?? 'A member'} requested a visit for ${listing.title}.`,
+    }});
+    return created;
   });
   response.status(201).json({item: serializeTourRequest(result)});
 }));
@@ -92,7 +101,7 @@ tourRequestsRouter.patch('/tour-requests/:id', requireSession, asyncRoute(async 
   const id = request.params.id as string;
   const requestRecord = await prisma.tourRequest.findUnique({
     where: {id},
-    include: {listing: {select: {id: true, ownerId: true}}},
+    include: {listing: {select: {id: true, ownerId: true, title: true}}},
   });
   if (!requestRecord || requestRecord.listing.ownerId !== ownerId) {
     throw new HttpError(404, 'REQUEST_NOT_FOUND', 'Visit request not found.');
@@ -102,7 +111,7 @@ tourRequestsRouter.patch('/tour-requests/:id', requireSession, asyncRoute(async 
   const updated = await prisma.$transaction(async (transaction) => {
     // Serialize owner decisions for this listing so two requests for one window cannot both be confirmed.
     await transaction.$queryRaw`SELECT "id" FROM "Listing" WHERE "id" = ${requestRecord.listingId} FOR UPDATE`;
-    const current = await transaction.tourRequest.findUnique({where: {id}, select: {status: true}});
+    const current = await transaction.tourRequest.findUnique({where: {id}, select: {status: true, requesterId: true}});
     if (!current || current.status !== 'PENDING') {
       throw new HttpError(409, 'REQUEST_ALREADY_RESOLVED', 'This visit request has already been resolved.');
     }
@@ -120,6 +129,16 @@ tourRequestsRouter.patch('/tour-requests/:id', requireSession, asyncRoute(async 
       if (taken) throw new HttpError(409, 'TIME_SLOT_TAKEN', 'Another visit request already holds this time window.');
     }
     await transaction.tourRequest.update({where: {id}, data: {status: nextStatus}});
+    const affectedPending = nextStatus === 'CONFIRMED' ? await transaction.tourRequest.findMany({
+      where: {
+        listingId: requestRecord.listingId,
+        scheduledDate: requestRecord.scheduledDate,
+        timeSlot: requestRecord.timeSlot,
+        status: 'PENDING',
+        id: {not: id},
+      },
+      select: {id: true, requesterId: true},
+    }) : [];
     if (nextStatus === 'CONFIRMED') {
       await transaction.tourRequest.updateMany({
         where: {
@@ -132,6 +151,24 @@ tourRequestsRouter.patch('/tour-requests/:id', requireSession, asyncRoute(async 
         data: {status: 'DECLINED'},
       });
     }
+    await transaction.notification.create({data: {
+      userId: current.requesterId,
+      tourRequestId: id,
+      type: nextStatus === 'CONFIRMED' ? 'TOUR_CONFIRMED' : 'TOUR_DECLINED',
+      title: nextStatus === 'CONFIRMED' ? 'Visit request confirmed' : 'Visit request declined',
+      body: nextStatus === 'CONFIRMED'
+        ? `Your visit for ${requestRecord.listing.title} was confirmed.`
+        : `Your visit request for ${requestRecord.listing.title} was declined.`,
+    }});
+    if (affectedPending.length > 0) {
+      await transaction.notification.createMany({data: affectedPending.map((affected) => ({
+        userId: affected.requesterId,
+        tourRequestId: affected.id,
+        type: 'TOUR_DECLINED' as const,
+        title: 'Visit window no longer available',
+        body: `Another visit for ${requestRecord.listing.title} was confirmed for this time window.`,
+      }))});
+    }
     return transaction.tourRequest.findUniqueOrThrow({where: {id}, include: tourInclude});
   });
   response.json({item: serializeTourRequest(updated)});
@@ -142,19 +179,32 @@ tourRequestsRouter.post('/tour-requests/:id/cancel', requireSession, asyncRoute(
   const id = request.params.id as string;
   const ownRequest = await prisma.tourRequest.findFirst({
     where: {id, OR: [{requesterId: userId}, {listing: {ownerId: userId}}]},
-    select: {status: true},
+    select: {status: true, requesterId: true, listingId: true, listing: {select: {ownerId: true, title: true}}},
   });
   if (!ownRequest) throw new HttpError(404, 'REQUEST_NOT_FOUND', 'Visit request not found.');
   if (ownRequest.status !== 'PENDING' && ownRequest.status !== 'CONFIRMED') {
     throw new HttpError(409, 'REQUEST_ALREADY_RESOLVED', 'This visit request is already closed.');
   }
-  const result = await prisma.tourRequest.updateMany({
-    where: {id, status: ownRequest.status},
-    data: {status: 'CANCELLED'},
+  await prisma.$transaction(async (transaction) => {
+    await transaction.$queryRaw`SELECT "id" FROM "Listing" WHERE "id" = ${ownRequest.listingId} FOR UPDATE`;
+    const current = await transaction.tourRequest.findFirst({
+      where: {id, OR: [{requesterId: userId}, {listing: {ownerId: userId}}]},
+      select: {status: true, requesterId: true, listingId: true, listing: {select: {ownerId: true, title: true}}},
+    });
+    if (!current) throw new HttpError(404, 'REQUEST_NOT_FOUND', 'Visit request not found.');
+    if (current.status !== 'PENDING' && current.status !== 'CONFIRMED') {
+      throw new HttpError(409, 'REQUEST_ALREADY_RESOLVED', 'This visit request is already closed.');
+    }
+    await transaction.tourRequest.update({where: {id}, data: {status: 'CANCELLED'}});
+    const cancelledByGuest = current.requesterId === userId;
+    await transaction.notification.create({data: {
+      userId: cancelledByGuest ? current.listing.ownerId : current.requesterId,
+      tourRequestId: id,
+      type: 'TOUR_CANCELLED',
+      title: 'Visit cancelled',
+      body: `The ${cancelledByGuest ? 'guest' : 'host'} cancelled the visit for ${current.listing.title}.`,
+    }});
   });
-  if (result.count !== 1) {
-    throw new HttpError(409, 'REQUEST_ALREADY_RESOLVED', 'This visit request has changed. Refresh and try again.');
-  }
   response.status(204).end();
 }));
 

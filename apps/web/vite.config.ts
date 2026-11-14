@@ -17,6 +17,8 @@ export default defineConfig(({mode}) => {
       __GOOGLE_MAPS_API_KEY__: JSON.stringify(mapsApiKey),
     },
     server: {
+      port: Number(env.VITE_PORT || 3000),
+      strictPort: true,
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
