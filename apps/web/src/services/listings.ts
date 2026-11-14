@@ -77,3 +77,22 @@ export async function saveListing(id: string) {
 export async function unsaveListing(id: string) {
   await apiRequest<void>(`/listings/${encodeURIComponent(id)}/save`, {method: 'DELETE'});
 }
+
+export async function uploadListingPhoto(listingId: string, file: File, altText = '') {
+  const intent = await apiRequest<{mediaId: string; uploadUrl: string; expiresInSeconds: number}>(
+    `/listings/${encodeURIComponent(listingId)}/media/uploads`,
+    {method: 'POST', body: JSON.stringify({contentType: file.type, byteSize: file.size, altText})},
+  );
+  try {
+    const result = await fetch(intent.uploadUrl, {method: 'PUT', headers: {'Content-Type': file.type}, body: file});
+    if (!result.ok) throw new Error('The photo could not be uploaded to storage. Check that MinIO is running and retry.');
+    await apiRequest<void>(`/listings/${encodeURIComponent(listingId)}/media/${encodeURIComponent(intent.mediaId)}/complete`, {method: 'POST'});
+  } catch (cause) {
+    await apiRequest<void>(`/listings/${encodeURIComponent(listingId)}/media/${encodeURIComponent(intent.mediaId)}`, {method: 'DELETE'}).catch(() => undefined);
+    throw cause;
+  }
+}
+
+export async function deleteListingPhoto(listingId: string, mediaId: string) {
+  await apiRequest<void>(`/listings/${encodeURIComponent(listingId)}/media/${encodeURIComponent(mediaId)}`, {method: 'DELETE'});
+}

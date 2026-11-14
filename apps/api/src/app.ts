@@ -14,6 +14,7 @@ import {conversationsRouter} from './routes/conversations.js';
 import {notificationsRouter} from './routes/notifications.js';
 import {discoveryRouter} from './routes/discovery.js';
 import {safetyRouter} from './routes/safety.js';
+import {listingMediaRouter} from './routes/listingMedia.js';
 
 export const app = express();
 
@@ -76,6 +77,7 @@ app.get('/api/v1/health/live', (_request, response) => {
 app.use('/api/v1/auth', authRateLimit);
 app.use('/api/v1', authRouter);
 app.use('/api/v1', listingsRouter);
+app.use('/api/v1', listingMediaRouter);
 app.use('/api/v1', tourRequestsRouter);
 app.use('/api/v1', conversationsRouter);
 app.use('/api/v1', notificationsRouter);

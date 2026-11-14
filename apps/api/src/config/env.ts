@@ -5,6 +5,17 @@ const envSchema = z.object({
   API_PORT: z.coerce.number().int().min(1).max(65_535).default(4000),
   WEB_ORIGIN: z.url().default('http://localhost:3000'),
   DATABASE_URL: z.string().regex(/^postgres(?:ql)?:\/\//, 'Must be a PostgreSQL connection URL'),
+  MEDIA_S3_ENDPOINT: z.url().optional(),
+  MEDIA_S3_PUBLIC_ENDPOINT: z.url().optional(),
+  MEDIA_S3_REGION: z.string().trim().min(1).default('us-east-1'),
+  MEDIA_S3_ACCESS_KEY: z.string().trim().min(1).optional(),
+  MEDIA_S3_SECRET_KEY: z.string().min(1).optional(),
+  MEDIA_S3_BUCKET: z.string().trim().min(3).max(63).default('other-half-media'),
+}).superRefine((value, context) => {
+  const storageValues = [value.MEDIA_S3_ENDPOINT, value.MEDIA_S3_PUBLIC_ENDPOINT, value.MEDIA_S3_ACCESS_KEY, value.MEDIA_S3_SECRET_KEY];
+  if (storageValues.some(Boolean) && !storageValues.every(Boolean)) {
+    context.addIssue({code: 'custom', path: ['MEDIA_S3_ENDPOINT'], message: 'Configure both S3 endpoints and credentials, or leave all four unset.'});
+  }
 });
 
 const parsed = envSchema.safeParse(process.env);

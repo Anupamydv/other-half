@@ -11,6 +11,7 @@ import {Prisma, type City, type ListingAmenity, type ListingStatus, type Listing
 import {HttpError, asyncRoute} from '../lib/http.js';
 import {optionalSession, requireSession} from './auth.js';
 import {prisma} from '../lib/prisma.js';
+import {createSignedViewUrl} from '../lib/mediaStorage.js';
 
 const cityToDb: Record<string, City> = {
   bengaluru: 'BENGALURU', mumbai: 'MUMBAI', delhi: 'DELHI_NCR', hyderabad: 'HYDERABAD',
@@ -20,6 +21,7 @@ const cityFromDb: Record<City, 'bengaluru' | 'mumbai' | 'delhi' | 'hyderabad'> =
 };
 const listingInclude = {
   owner: {select: {profile: {select: {displayName: true}}}},
+  media: {where: {status: 'READY'}, orderBy: [{sortOrder: 'asc'}, {createdAt: 'asc'}]},
 } satisfies Prisma.ListingInclude;
 
 export const listingsRouter = Router();
@@ -52,7 +54,7 @@ listingsRouter.get('/listings', optionalSession, asyncRoute(async (request, resp
     : [];
   const savedIds = new Set(savedRows.map((item) => item.listingId));
   response.json({
-    items: items.map((item) => serializeListing(item, savedIds.has(item.id))),
+    items: await Promise.all(items.map((item) => serializeListing(item, savedIds.has(item.id)))),
     nextCursor: hasMore ? items.at(-1)?.id ?? null : null,
   });
 }));
@@ -75,7 +77,7 @@ listingsRouter.get('/listings/mine', requireSession, asyncRoute(async (_request,
   });
   const hasMore = rows.length > limit;
   const items = rows.slice(0, limit);
-  response.json({items: items.map((item) => serializeListing(item, false)), nextCursor: hasMore ? items.at(-1)?.id ?? null : null});
+  response.json({items: await Promise.all(items.map((item) => serializeListing(item, false))), nextCursor: hasMore ? items.at(-1)?.id ?? null : null});
 }));
 
 listingsRouter.get('/listings/saved', requireSession, asyncRoute(async (request, response) => {
@@ -98,7 +100,7 @@ listingsRouter.get('/listings/saved', requireSession, asyncRoute(async (request,
   });
   const hasMore = rows.length > limit;
   const items = rows.slice(0, limit);
-  response.json({items: items.map((row) => serializeListing(row.listing, true)), nextCursor: hasMore ? items.at(-1)?.listingId ?? null : null});
+  response.json({items: await Promise.all(items.map((row) => serializeListing(row.listing, true))), nextCursor: hasMore ? items.at(-1)?.listingId ?? null : null});
 }));
 
 listingsRouter.put('/listings/:id/save', requireSession, asyncRoute(async (request, response) => {
@@ -133,7 +135,7 @@ listingsRouter.get('/listings/:id', optionalSession, asyncRoute(async (request, 
   const saved = userId ? await prisma.savedListing.findUnique({
     where: {userId_listingId: {userId, listingId: listing.id}}, select: {listingId: true},
   }) : null;
-  response.json({item: serializeListing(listing, Boolean(saved))});
+  response.json({item: await serializeListing(listing, Boolean(saved))});
 }));
 
 listingsRouter.post('/listings', requireSession, asyncRoute(async (request, response) => {
@@ -143,7 +145,7 @@ listingsRouter.post('/listings', requireSession, asyncRoute(async (request, resp
     data: toCreateData(parsed.data, response.locals.sessionUserId as string),
     include: listingInclude,
   });
-  response.status(201).json({item: serializeListing(listing, false)});
+  response.status(201).json({item: await serializeListing(listing, false)});
 }));
 
 listingsRouter.patch('/listings/:id', requireSession, asyncRoute(async (request, response) => {
@@ -161,7 +163,7 @@ listingsRouter.patch('/listings/:id', requireSession, asyncRoute(async (request,
   });
   if (result.count !== 1) throw new HttpError(409, 'LISTING_CHANGED', 'This listing changed. Refresh and try again.');
   const listing = await prisma.listing.findUniqueOrThrow({where: {id}, include: listingInclude});
-  response.json({item: serializeListing(listing, false)});
+  response.json({item: await serializeListing(listing, false)});
 }));
 
 listingsRouter.post('/listings/:id/archive', requireSession, asyncRoute(async (request, response) => {
@@ -231,7 +233,7 @@ function toUpdateData(input: Partial<ListingInput>) {
   };
 }
 
-function serializeListing(listing: Prisma.ListingGetPayload<{include: typeof listingInclude}>, savedByMe: boolean) {
+async function serializeListing(listing: Prisma.ListingGetPayload<{include: typeof listingInclude}>, savedByMe: boolean) {
   return {
     id: listing.id,
     ownerId: listing.ownerId,
@@ -250,6 +252,10 @@ function serializeListing(listing: Prisma.ListingGetPayload<{include: typeof lis
     updatedAt: listing.updatedAt.toISOString(),
     ownerDisplayName: listing.owner.profile?.displayName ?? 'Other Half member',
     savedByMe,
+    media: await Promise.all(listing.media.map(async (item) => ({
+      id: item.id, url: await createSignedViewUrl(item.objectKey), contentType: item.contentType,
+      byteSize: item.byteSize, altText: item.altText,
+    }))),
   };
 }
 

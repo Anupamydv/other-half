@@ -11,6 +11,8 @@
     "db:migrate": "prisma migrate dev --config=../../prisma.config.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1169.0",
+    "@aws-sdk/s3-request-presigner": "^3.1169.0",
     "@other-half/contracts": "0.1.0",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
@@ -25,8 +27,8 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/node": "^22.14.0",
-    "prisma": "7.10.1",
     "pg": "^8.16.3",
+    "prisma": "7.10.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }

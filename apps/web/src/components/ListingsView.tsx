@@ -1,5 +1,5 @@
 import {useEffect, useState, type FormEvent} from 'react';
-import {Archive, ArrowLeft, Bookmark, BookmarkCheck, Building2, CalendarDays, Check, ChevronDown, Home, MapPin, Pencil, Plus, Search} from 'lucide-react';
+import {Archive, ArrowLeft, Bookmark, BookmarkCheck, Building2, CalendarDays, Check, ChevronDown, Home, MapPin, Pencil, Plus, Search, Trash2, Upload} from 'lucide-react';
 import {
   listingCreateSchema,
   type ListingAmenity,
@@ -8,7 +8,7 @@ import {
   type ListingType,
 } from '@other-half/contracts';
 import {CITY_THEMES} from '../data/indiaData';
-import {archiveListing, createListing, getListings, getMyListings, getSavedListings, saveListing, unsaveListing, updateListing} from '../services/listings';
+import {archiveListing, createListing, deleteListingPhoto, getListings, getMyListings, getSavedListings, saveListing, unsaveListing, updateListing, uploadListingPhoto} from '../services/listings';
 import {TourRequestForm} from './TourRequestForm';
 import type {CityId} from '../types';
 
@@ -257,6 +257,10 @@ function ListingCard({listing, isOwner, showSave, showRequest, saving, onEdit, o
   const rent = new Intl.NumberFormat('en-IN', {style: 'currency', currency: 'INR', maximumFractionDigits: 0}).format(listing.monthlyRent);
   const labels = listing.amenities.map((amenity) => AMENITIES.find((item) => item.id === amenity)?.label ?? amenity);
   return <article className="flex flex-col rounded-[24px] bg-white p-5 shadow-kinship-1">
+    {listing.media.length > 0 && <div className="-mx-5 -mt-5 mb-4 overflow-hidden rounded-t-[24px] bg-slate-100">
+      <img src={listing.media[0].url} alt={listing.media[0].altText || `${listing.title} listing photo`} loading="lazy" className="h-48 w-full object-cover" />
+      {listing.media.length > 1 && <p className="px-3 py-1.5 text-right text-[11px] font-semibold text-slate-600">1 of {listing.media.length} photos</p>}
+    </div>}
     <div className="flex items-start justify-between gap-3">
       <span className="rounded-full bg-[#F05A4A]/10 px-3 py-1 text-[11px] font-extrabold text-[#AD2A20]">{TYPE_LABELS[listing.listingType]}</span>
       <div className="flex items-center gap-2">
@@ -299,6 +303,16 @@ function ListingForm({cityId, listing, onCancel, onSaved}: {
   const [amenities, setAmenities] = useState<ListingAmenity[]>(listing?.amenities ?? []);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [persisted, setPersisted] = useState<ListingDto | null>(listing);
+  const [removedMedia, setRemovedMedia] = useState<string[]>([]);
+
+  useEffect(() => {
+    const urls = photos.map((file) => URL.createObjectURL(file));
+    setPreviews(urls);
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, [photos]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -315,8 +329,12 @@ function ListingForm({cityId, listing, onCancel, onSaved}: {
     setBusy(true);
     try {
       const input: ListingInput = result.data;
-      if (listing) await updateListing(listing.id, input);
-      else await createListing(input);
+      const target = persisted ? await updateListing(persisted.id, input) : await createListing(input);
+      setPersisted(target);
+      for (const photo of photos) {
+        await uploadListingPhoto(target.id, photo, photo.name.replace(/\.[^.]+$/, '').slice(0, 200));
+        setPhotos((current) => current.filter((item) => item !== photo));
+      }
       onSaved();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save this listing.');
@@ -330,6 +348,39 @@ function ListingForm({cityId, listing, onCancel, onSaved}: {
       ? current.filter((item) => item !== amenity)
       : [...current, amenity]);
   };
+
+  const handlePhotoSelection = (files: FileList | null) => {
+    if (!files) return;
+    const selected = Array.from(files);
+    if ((persisted?.media.length ?? 0) + photos.length + selected.length > 5) {
+      setError('A listing can have up to five photos. Remove a photo or choose fewer files.');
+      return;
+    }
+    const invalid = selected.find((file) => !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024 || file.size === 0);
+    if (invalid) {
+      setError('Choose JPEG, PNG, or WebP photos under 10 MB each.');
+      return;
+    }
+    setError('');
+    setPhotos((current) => [...current, ...selected]);
+  };
+
+  const removeExistingPhoto = async (mediaId: string) => {
+    if (!persisted) return;
+    setBusy(true);
+    setError('');
+    try {
+      await deleteListingPhoto(persisted.id, mediaId);
+      setRemovedMedia((current) => [...current, mediaId]);
+      setPersisted({...persisted, media: persisted.media.filter((media) => media.id !== mediaId)});
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not remove this photo.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const existingPhotos = (persisted?.media ?? []).filter((media) => !removedMedia.includes(media.id));
 
   const inputClass = 'mt-1.5 h-11 w-full rounded-xl bg-[#F4F2EE] px-3.5 text-sm text-[#1E293B] outline-none focus:ring-2 focus:ring-[#F05A4A]/40';
   const labelClass = 'block text-xs font-bold text-[#1E293B]';
@@ -357,7 +408,16 @@ function ListingForm({cityId, listing, onCancel, onSaved}: {
           </label>)}
         </div>
       </fieldset>
-      <p className="rounded-xl bg-amber-50 px-3.5 py-3 text-xs leading-5 text-amber-900">Photos and video will be added when private media storage is configured. This listing is text-only for now.</p>
+      <fieldset className="space-y-3">
+        <legend className={labelClass}>Listing photos <span className="font-medium text-[#64748B]">({existingPhotos.length + photos.length}/5)</span></legend>
+        <p className="text-xs leading-5 text-[#64748B]">JPEG, PNG, or WebP up to 10 MB each. Photos are private in storage and shown through temporary links.</p>
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-[#F4F2EE] px-4 py-3 text-xs font-bold text-[#1E293B] hover:bg-[#EAE6DF]"><Upload className="h-4 w-4" /> Choose photos<input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy || existingPhotos.length + photos.length >= 5} onChange={(event) => {handlePhotoSelection(event.target.files); event.currentTarget.value = '';}} className="sr-only" /></label>
+        {(existingPhotos.length > 0 || photos.length > 0) && <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {existingPhotos.map((media) => <div key={media.id} className="relative overflow-hidden rounded-xl"><img src={media.url} alt={media.altText || 'Listing photo'} className="h-28 w-full object-cover" /><button type="button" disabled={busy} onClick={() => void removeExistingPhoto(media.id)} aria-label="Remove listing photo" className="absolute right-2 top-2 rounded-full bg-white/95 p-2 text-red-700 shadow disabled:opacity-50"><Trash2 className="h-4 w-4" /></button></div>)}
+          {photos.map((photo, index) => <div key={`${photo.name}-${photo.lastModified}-${index}`} className="relative overflow-hidden rounded-xl"><img src={previews[index]} alt={`Selected photo ${photo.name}`} className="h-28 w-full object-cover" /><button type="button" onClick={() => setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index))} aria-label="Remove selected photo" className="absolute right-2 top-2 rounded-full bg-white/95 p-2 text-red-700 shadow"><Trash2 className="h-4 w-4" /></button><span className="block truncate px-2 py-1 text-[10px] text-slate-600">{photo.name}</span></div>)}
+        </div>}
+      </fieldset>
+      {persisted && photos.length > 0 && <p role="status" className="rounded-xl bg-amber-50 px-3.5 py-3 text-xs leading-5 text-amber-900">Listing details are saved. If an upload fails, your selected photos remain here so you can retry.</p>}
       {error && <p role="alert" className="rounded-xl bg-red-50 px-3.5 py-3 text-sm text-red-700">{error}</p>}
       <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
         <button type="button" onClick={onCancel} className="rounded-xl bg-[#F4F2EE] px-5 py-3 text-sm font-bold text-[#475569]">Cancel</button>

@@ -127,6 +127,7 @@ export const listingDtoSchema = z.object({
   updatedAt: z.iso.datetime(),
   ownerDisplayName: z.string(),
   savedByMe: z.boolean(),
+  media: z.array(z.object({id: z.string(), url: z.url(), contentType: z.string(), byteSize: z.number().int().positive(), altText: z.string()})),
 });
 export const listingPageSchema = z.object({items: z.array(listingDtoSchema), nextCursor: z.string().nullable()});
 
@@ -135,6 +136,13 @@ export type ListingAmenity = z.infer<typeof listingAmenitySchema>;
 export type ListingInput = z.infer<typeof listingCreateSchema>;
 export type ListingUpdate = z.infer<typeof listingUpdateSchema>;
 export type ListingDto = z.infer<typeof listingDtoSchema>;
+
+export const listingMediaUploadSchema = z.object({
+  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  byteSize: z.number().int().min(1).max(10 * 1024 * 1024),
+  altText: z.string().trim().max(200).default(''),
+});
+export const listingMediaUploadResponseSchema = z.object({mediaId: z.string(), uploadUrl: z.url(), expiresInSeconds: z.number().int().positive()});
 
 export const tourTimeSlotSchema = z.enum(['MORNING', 'AFTERNOON', 'EVENING']);
 export const tourRequestStatusSchema = z.enum(['PENDING', 'CONFIRMED', 'DECLINED', 'CANCELLED']);

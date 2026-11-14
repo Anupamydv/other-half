@@ -32,6 +32,7 @@ model User {
   reportsSubmitted UserReport[] @relation("ReportAuthor")
   reportsReceived UserReport[] @relation("ReportSubject")
   reportsReviewed UserReport[] @relation("ReportReviewer")
+  mediaUploads ListingMedia[]
 
   @@index([createdAt])
 }
@@ -85,6 +86,7 @@ model Listing {
   savedBy        SavedListing[]
   tourRequests   TourRequest[]
   conversations  Conversation[]
+  media          ListingMedia[]
 
   @@index([status, city, neighborhood, monthlyRent])
   @@index([status, city, neighborhood, availableFrom])
@@ -103,6 +105,27 @@ model SavedListing {
   @@id([userId, listingId])
   @@index([listingId])
   @@index([userId, createdAt])
+}
+
+model ListingMedia {
+  id          String          @id @default(cuid())
+  listingId   String
+  uploaderId  String
+  objectKey   String          @unique
+  contentType String          @db.VarChar(100)
+  byteSize    Int
+  altText     String          @default("") @db.VarChar(200)
+  sortOrder   Int             @default(0)
+  status      ListingMediaStatus @default(PENDING)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  verifiedAt  DateTime?
+  expiresAt   DateTime        @default(now())
+  listing     Listing         @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  uploader    User            @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, status, sortOrder, createdAt])
+  @@index([uploaderId, createdAt])
 }
 
 model TourRequest {
@@ -300,4 +323,9 @@ enum UserReportStatus {
   IN_REVIEW
   RESOLVED
   DISMISSED
+}
+
+enum ListingMediaStatus {
+  PENDING
+  READY
 }
