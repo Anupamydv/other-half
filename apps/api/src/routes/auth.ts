@@ -1,6 +1,6 @@
 import {createHash, randomBytes} from 'node:crypto';
 import {Router, type RequestHandler} from 'express';
-import {loginInputSchema, profileUpdateSchema, registerInputSchema, type LifestylePreferences} from '@other-half/contracts';
+import {changePasswordInputSchema, loginInputSchema, profileUpdateSchema, registerInputSchema, type LifestylePreferences} from '@other-half/contracts';
 import {Prisma, type City} from '../generated/prisma/client.js';
 import {env} from '../config/env.js';
 import {HttpError, asyncRoute} from '../lib/http.js';
@@ -127,6 +127,28 @@ authRouter.post('/auth/logout', asyncRoute(async (request, response) => {
     await prisma.session.deleteMany({where: {tokenHash: digest(token)}});
   }
   clearSessionCookie(response);
+  response.status(204).end();
+}));
+
+authRouter.post('/auth/password', requireSession, asyncRoute(async (request, response) => {
+  const parsed = changePasswordInputSchema.safeParse(request.body);
+  if (!parsed.success) throw new HttpError(400, 'VALIDATION_ERROR', parsed.error.issues[0]?.message ?? 'Invalid password details.');
+  const userId = response.locals.sessionUserId as string;
+  const user = await prisma.user.findUnique({where: {id: userId}, select: {passwordHash: true}});
+  if (!user || !(await verifyPassword(parsed.data.currentPassword, user.passwordHash))) {
+    throw new HttpError(400, 'CURRENT_PASSWORD_INCORRECT', 'Current password is incorrect.');
+  }
+
+  const passwordHash = await hashPassword(parsed.data.newPassword);
+  const token = randomBytes(32).toString('base64url');
+  const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
+  await prisma.$transaction(async (transaction) => {
+    await transaction.user.update({where: {id: userId}, data: {passwordHash}});
+    await transaction.session.deleteMany({where: {userId}});
+    await transaction.session.create({data: {userId, tokenHash: digest(token), expiresAt}});
+  });
+
+  setSessionCookie(response, token);
   response.status(204).end();
 }));
 

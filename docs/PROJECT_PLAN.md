@@ -30,6 +30,7 @@ Help people moving within Bengaluru, Mumbai, Delhi NCR, and Hyderabad find compa
 - [x] Revocable seven-day sessions stored as SHA-256 token hashes and delivered in HTTP-only cookies.
 - [x] Same-site cookie policy, origin checks on write requests, and an initial per-process auth rate limit.
 - [x] Persist and validate editable profile details and lifestyle preferences.
+- [x] Edit age and neighborhood; change password and revoke other active sessions.
 - [ ] Email verification, password recovery, account deletion, and production shared rate-limit storage.
 - Acceptance: a user can create an account, return in a new browser session, edit their profile, and access no other user's private data.
 
