@@ -36,12 +36,18 @@ Help people moving within Bengaluru, Mumbai, Delhi NCR, and Hyderabad find compa
 
 The current identity slice implements registration, login/logout, session lookup, and profile/preference updates. Email verification and password recovery are deferred until an email provider and sender domain are configured. The in-memory rate limiter is suitable only for a single API process; deploy behind shared rate-limit storage before scaling to multiple replicas.
 
-### 2. Housing listings and media
+### 2. Housing listings and media - in progress
 
-- Create/edit/archive a room or flat listing with address privacy, rent, deposit, availability, amenities, and household expectations.
-- Upload images/video to object storage using validated signed uploads, with size/type limits and processing status.
-- Search/filter by city, neighborhood, budget, availability, and required attributes; provide map-friendly coordinates with location privacy controls.
+- [x] Create, edit, and archive a room or flat listing with owner-only mutations.
+- [x] Browse active listings by city, neighborhood, maximum rent, room type, move-in date, and required amenities with cursor pagination.
+- [x] Save and unsave listings to a persistent personal list.
+- [x] Store rent, deposit, availability, minimum stay, amenities, and household expectations without collecting exact street addresses.
+- [ ] Upload images/video to object storage using validated signed uploads, with size/type limits and processing status.
+- [x] Filter listings by the desired move-in date and all selected amenities.
+- [ ] Add map-friendly coordinates with location privacy controls.
 - Acceptance: listing changes persist across devices, unauthorized edits are rejected, and incomplete uploads never appear as published listings.
+
+Listings are text-only until a private media storage provider is configured. Public listing responses intentionally expose neighborhood-level location only.
 
 ### 3. Compatibility and matching
 

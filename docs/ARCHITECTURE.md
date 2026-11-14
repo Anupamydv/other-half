@@ -26,7 +26,7 @@ We are starting with a modular monolith. Housing discovery, profiles, matching, 
 
 ## Initial domain model
 
-`User` is the authentication identity. `Profile` is public, editable product information with a one-to-one user relation. Subsequent migrations add lifestyle preferences, listings and media, likes/matches, conversations/messages, and tour requests. Sensitive identity and moderation data will remain separate from public profile fields.
+`User` is the authentication identity. `Profile` is editable product information with a one-to-one user relation. `Listing` belongs to one user and stores a neighborhood-level location, rent, availability, amenities, and household details; exact street addresses are not collected. `SavedListing` is a user/listing join record so saved homes persist across sessions and devices. Listing media will be added through private object storage after a provider is configured. Later migrations add likes/matches, conversations/messages, and tour requests. Sensitive identity and moderation data will remain separate from public profile and listing fields.
 
 ## Reliability and security baseline
 
