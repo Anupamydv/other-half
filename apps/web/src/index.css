@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+:root {
+  --bg-linen: #faf9f6;
+  --bg-warm: #fff8f0;
+  --surface-card: #ffffff;
+  --surface-oat: #f4f2ee;
+  --primary-coral: #f05a4a;
+  --secondary-amber: #e08738;
+  --tertiary-emerald: #10b981;
+  --ink-slate: #1e293b;
+  --muted-slate: #64748b;
+  --sandstone: #76726b;
+}
+
+@layer base {
+  html,
+  body {
+    background-color: var(--bg-linen);
+    color: var(--ink-slate);
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.shadow-kinship-1 {
+  box-shadow: 0px 2px 8px -2px rgba(30, 41, 59, 0.04),
+    0px 6px 16px -4px rgba(30, 41, 59, 0.06);
+}
+
+.shadow-kinship-2 {
+  box-shadow: 0px 4px 12px -2px rgba(30, 41, 59, 0.06),
+    0px 12px 28px -6px rgba(30, 41, 59, 0.08);
+}
+
+.shadow-kinship-3 {
+  box-shadow: 0px 10px 32px -4px rgba(30, 41, 59, 0.12),
+    0px 20px 48px -8px rgba(30, 41, 59, 0.1);
+}
+
+.shadow-kinship-dock {
+  box-shadow: 0px 12px 36px -4px rgba(240, 90, 74, 0.14),
+    0px 8px 24px -2px rgba(30, 41, 59, 0.08);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

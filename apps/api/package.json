@@ -1,0 +1,33 @@
+{
+  "name": "@other-half/api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file=../../.env --import tsx --watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "db:generate": "prisma generate --config=../../prisma.config.ts",
+    "db:migrate": "prisma migrate dev --config=../../prisma.config.ts"
+  },
+  "dependencies": {
+    "@other-half/contracts": "0.1.0",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "helmet": "^8.1.0",
+    "pino": "^9.7.0",
+    "pino-http": "^10.5.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.14.0",
+    "prisma": "7.10.1",
+    "pg": "^8.16.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../apps/api/src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  profile      Profile?
+
+  @@index([createdAt])
+}
+
+model Profile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  displayName  String
+  city         City     @default(BENGALURU)
+  neighborhood String?
+  bio          String   @default("") @db.VarChar(500)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum City {
+  BENGALURU
+  MUMBAI
+  DELHI_NCR
+  HYDERABAD
+}
