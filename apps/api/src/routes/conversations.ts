@@ -9,8 +9,8 @@ export const conversationsRouter = Router();
 
 const conversationInclude = {
   listing: {select: {id: true, title: true, city: true, neighborhood: true}},
-  owner: {select: {id: true, profile: {select: {displayName: true}}}},
-  guest: {select: {id: true, profile: {select: {displayName: true}}}},
+  owner: {select: {id: true, profile: {select: {displayName: true, city: true, neighborhood: true}}}},
+  guest: {select: {id: true, profile: {select: {displayName: true, city: true, neighborhood: true}}}},
   messages: {orderBy: [{createdAt: 'desc'}, {id: 'desc'}], take: 1},
 } satisfies Prisma.ConversationInclude;
 
@@ -23,11 +23,12 @@ function serializeMessage(message: {id: string; conversationId: string; senderId
 function serializeConversation(row: Prisma.ConversationGetPayload<{include: typeof conversationInclude}>, userId: string, blockedIds: Set<string>) {
   const isOwner = row.ownerId === userId;
   const peer = isOwner ? row.guest : row.owner;
+  const peerCity = row.listing?.city ?? peer.profile?.city ?? 'BENGALURU';
   const latest = row.messages[0];
   const readAt = isOwner ? row.ownerReadAt : row.guestReadAt;
   return {
-    id: row.id, listingId: row.listingId, listingTitle: row.listing.title,
-    cityId: cityFromDb[row.listing.city], neighborhood: row.listing.neighborhood,
+    id: row.id, listingId: row.listingId, listingTitle: row.listing?.title ?? 'Roommate match',
+    cityId: cityFromDb[peerCity], neighborhood: row.listing?.neighborhood ?? peer.profile?.neighborhood ?? 'Neighborhood not set',
     peerId: peer.id, peerDisplayName: peer.profile?.displayName ?? 'Other Half member',
     lastMessage: latest ? serializeMessage(latest) : null,
     lastMessageAt: (latest?.createdAt ?? row.lastMessageAt).toISOString(),
@@ -66,6 +67,25 @@ conversationsRouter.post('/tour-requests/:id/conversation', requireSession, asyn
     select: {id: true},
   });
   response.status(200).json({id: conversation.id});
+}));
+
+conversationsRouter.post('/matches/:id/conversation', requireSession, asyncRoute(async (request, response) => {
+  const userId = response.locals.sessionUserId as string;
+  const match = await prisma.match.findFirst({
+    where: {id: request.params.id as string, OR: [{lowUserId: userId}, {highUserId: userId}]},
+    select: {id: true, lowUserId: true, highUserId: true},
+  });
+  if (!match) throw new HttpError(404, 'MATCH_NOT_FOUND', 'Match not found.');
+  const peerId = match.lowUserId === userId ? match.highUserId : match.lowUserId;
+  const blocked = await prisma.userBlock.findFirst({where: {OR: [{blockerId: userId, blockedId: peerId}, {blockerId: peerId, blockedId: userId}]}});
+  if (blocked) throw new HttpError(403, 'MESSAGING_BLOCKED', 'Messaging is unavailable for this match.');
+  const conversation = await prisma.conversation.upsert({
+    where: {matchId: match.id},
+    create: {matchId: match.id, listingId: null, ownerId: match.lowUserId, guestId: match.highUserId},
+    update: {},
+    select: {id: true},
+  });
+  response.json({id: conversation.id});
 }));
 
 conversationsRouter.get('/conversations', requireSession, asyncRoute(async (_request, response) => {

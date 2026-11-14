@@ -22,6 +22,7 @@ interface DetailAndTourModalProps {
   profile: RoommateProfile;
   userPrefs: LifestylePreferences;
   isMatched: boolean;
+  bookingDisabled?: boolean;
   onClose: () => void;
   onMatch: (profileId: string) => void;
   onNavigateToFlat: (profile: RoommateProfile) => void;
@@ -38,6 +39,7 @@ export const DetailAndTourModal: React.FC<DetailAndTourModalProps> = ({
   profile,
   userPrefs,
   isMatched,
+  bookingDisabled = false,
   onClose,
   onMatch,
   onNavigateToFlat,
@@ -89,6 +91,7 @@ export const DetailAndTourModal: React.FC<DetailAndTourModalProps> = ({
 
   const handleBook = (e: React.FormEvent) => {
     e.preventDefault();
+    if (bookingDisabled) return;
     onBookTour({
       profile,
       date: tourDate,
@@ -350,7 +353,9 @@ export const DetailAndTourModal: React.FC<DetailAndTourModalProps> = ({
               <span>Book a House Tour</span>
             </h3>
 
-            {tourBooked ? (
+            {bookingDisabled ? (
+              <p className="rounded-2xl bg-white p-4 text-sm leading-6 text-[#64748B]">This map card is example content. Real visit requests are available from saved home listings.</p>
+            ) : tourBooked ? (
               <div className="bg-white rounded-2xl p-4 border border-[#10B981]/30 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-bold text-[#006947]">

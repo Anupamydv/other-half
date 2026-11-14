@@ -1,5 +1,5 @@
 import React, {useEffect, useState, type FormEvent} from 'react';
-import {CheckCircle2, RotateCcw, SlidersHorizontal, Sparkles} from 'lucide-react';
+import {CheckCircle2, Eye, EyeOff, SlidersHorizontal, Sparkles} from 'lucide-react';
 import {CITY_THEMES} from '../data/indiaData';
 import {
   CityId,
@@ -16,16 +16,18 @@ interface ProfileQuizViewProps {
   userProfile: UserSelfProfile;
   onUpdatePreferences: (prefs: LifestylePreferences) => void | Promise<void>;
   onUpdateDetails: (updates: Partial<Omit<UserSelfProfile, 'preferences'>>) => void | Promise<void>;
+  discoveryEnabled: boolean;
+  onUpdateDiscoveryEnabled: (enabled: boolean) => Promise<void>;
   onChangePassword: (currentPassword: string, newPassword: string) => Promise<void>;
-  onResetSwipeDeck: () => void;
 }
 
 export const ProfileQuizView: React.FC<ProfileQuizViewProps> = ({
   userProfile,
   onUpdatePreferences,
   onUpdateDetails,
+  discoveryEnabled,
+  onUpdateDiscoveryEnabled,
   onChangePassword,
-  onResetSwipeDeck,
 }) => {
   const [prefs, setPrefs] = useState<LifestylePreferences>(userProfile.preferences);
   const [details, setDetails] = useState(userProfile);
@@ -37,6 +39,7 @@ export const ProfileQuizView: React.FC<ProfileQuizViewProps> = ({
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordBusy, setPasswordBusy] = useState(false);
+  const [discoveryBusy, setDiscoveryBusy] = useState(false);
 
   useEffect(() => {
     setPrefs(userProfile.preferences);
@@ -99,7 +102,7 @@ export const ProfileQuizView: React.FC<ProfileQuizViewProps> = ({
           <div>
             <h2 className="text-lg font-extrabold text-[#1E293B]">Your Profile</h2>
             <p className="text-xs text-[#64748B]">
-              Saved to your account. Public discovery is not active yet.
+              Saved to your account. Discovery is opt-in and controlled by you.
             </p>
           </div>
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#10B981]/12 text-[#006947] text-xs font-bold">
@@ -186,16 +189,9 @@ export const ProfileQuizView: React.FC<ProfileQuizViewProps> = ({
 
         <button type="button" onClick={() => void handleSaveDetails()} className="w-full rounded-xl bg-[#1E293B] px-4 py-3 text-sm font-bold text-white hover:bg-[#334155]">Save profile</button>
 
-        <div className="pt-2 border-t border-slate-900/5 flex items-center justify-between gap-3">
-          <span className="text-xs text-[#64748B]">Want to revisit passed cards?</span>
-          <button
-            type="button"
-            onClick={onResetSwipeDeck}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#F4F2EE] hover:bg-[#EAE6DF] text-xs font-bold text-[#1E293B]"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reset Swipe Deck</span>
-          </button>
+        <div className="rounded-2xl border border-slate-900/5 bg-[#FAF9F6] p-4">
+          <div className="flex items-start justify-between gap-4"><div><h3 className="text-sm font-extrabold text-[#1E293B]">Roommate discovery</h3><p className="mt-1 max-w-sm text-xs leading-5 text-[#64748B]">{discoveryEnabled ? 'Your profile can be shown to opted-in members in your selected city.' : 'Your profile is private from roommate discovery until you turn this on.'}</p></div><button type="button" disabled={discoveryBusy} aria-pressed={discoveryEnabled} onClick={() => {setDiscoveryBusy(true); void onUpdateDiscoveryEnabled(!discoveryEnabled).catch((error: unknown) => setErrorNotice(error instanceof Error ? error.message : 'Could not update discovery settings.')).finally(() => setDiscoveryBusy(false));}} className={`inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2.5 text-xs font-bold disabled:opacity-50 ${discoveryEnabled ? 'bg-emerald-100 text-emerald-900' : 'bg-[#1E293B] text-white'}`}>{discoveryEnabled ? <Eye className="h-3.5 w-3.5"/> : <EyeOff className="h-3.5 w-3.5"/>}{discoveryBusy ? 'Saving…' : discoveryEnabled ? 'Visible' : 'Enable'}</button></div>
+          {errorNotice && <p role="alert" className="mt-2 text-xs text-red-700">{errorNotice}</p>}
         </div>
 
         <form onSubmit={(event) => void handleChangePassword(event)} className="space-y-3 border-t border-slate-900/5 pt-4">

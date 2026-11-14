@@ -10,6 +10,7 @@ export interface AccountProfile {
   cityId: 'bengaluru' | 'mumbai' | 'delhi' | 'hyderabad';
   neighborhood: string | null;
   bio: string;
+  discoveryEnabled: boolean;
   preferences: {
     sleep: 'Early Bird' | 'Balanced' | 'Night Owl';
     kitchen: 'Pure Veg' | 'Eggetarian' | 'Non-Veg Friendly';

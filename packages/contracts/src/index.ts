@@ -49,6 +49,7 @@ export const profileUpdateSchema = z.object({
   neighborhood: z.string().trim().max(100).nullable().optional(),
   bio: z.string().trim().max(500).optional(),
   preferences: lifestylePreferencesSchema.optional(),
+  discoveryEnabled: z.boolean().optional(),
 }).refine((value) => Object.keys(value).length > 0, 'Provide at least one profile field.');
 
 export type LifestylePreferences = z.infer<typeof lifestylePreferencesSchema>;
@@ -193,7 +194,7 @@ export const conversationMessageSchema = z.object({
 });
 export const conversationMessagePageSchema = z.object({items: z.array(conversationMessageSchema), nextCursor: z.string().nullable()});
 export const conversationDtoSchema = z.object({
-  id: z.string(), listingId: z.string(), listingTitle: z.string(), cityId: cityIdSchema, neighborhood: z.string(),
+  id: z.string(), listingId: z.string().nullable(), listingTitle: z.string(), cityId: cityIdSchema, neighborhood: z.string(),
   peerId: z.string(), peerDisplayName: z.string(), lastMessage: conversationMessageSchema.nullable(),
   lastMessageAt: z.iso.datetime(), unread: z.boolean(), blockedByMe: z.boolean(), blockedByPeer: z.boolean(),
 });
@@ -208,3 +209,30 @@ export const notificationDtoSchema = z.object({
 });
 export const notificationListSchema = z.object({items: z.array(notificationDtoSchema), unreadCount: z.number().int().nonnegative()});
 export type NotificationDto = z.infer<typeof notificationDtoSchema>;
+
+export const discoveryActionTypeSchema = z.enum(['PASS', 'LIKE', 'SUPER_LIKE']);
+export const discoveryQuerySchema = z.object({
+  cityId: cityIdSchema,
+  limit: z.coerce.number().int().min(1).max(30).default(15),
+  cursor: z.string().min(1).max(64).optional(),
+});
+export const discoveryActionSchema = z.object({
+  targetUserId: z.string().trim().min(1).max(64),
+  action: discoveryActionTypeSchema,
+});
+export const publicProfileSchema = z.object({
+  id: z.string(), displayName: z.string(), age: z.number().int().nullable(), role: z.string().nullable(),
+  cityId: cityIdSchema, neighborhood: z.string().nullable(), bio: z.string(), preferences: lifestylePreferencesSchema,
+});
+export const discoveryPageSchema = z.object({
+  items: z.array(publicProfileSchema), nextCursor: z.string().nullable(), discoveryEnabled: z.boolean(),
+});
+export const matchDtoSchema = z.object({
+  id: z.string(), conversationId: z.string(), createdAt: z.iso.datetime(), profile: publicProfileSchema,
+});
+export const matchPageSchema = z.object({items: z.array(matchDtoSchema)});
+export const discoveryActionResponseSchema = z.object({
+  action: discoveryActionTypeSchema, matched: z.boolean(), conversationId: z.string().nullable(),
+});
+export type PublicProfileDto = z.infer<typeof publicProfileSchema>;
+export type MatchDto = z.infer<typeof matchDtoSchema>;

@@ -174,6 +174,12 @@ authRouter.patch('/profile/me', requireSession, asyncRoute(async (request, respo
   const parsed = profileUpdateSchema.safeParse(request.body);
   if (!parsed.success) throw new HttpError(400, 'VALIDATION_ERROR', parsed.error.issues[0]?.message ?? 'Invalid profile details.');
   const input = parsed.data;
+  const current = await prisma.profile.findUnique({where: {userId: response.locals.sessionUserId as string}, select: {age: true, discoveryEnabled: true}});
+  const nextAge = input.age !== undefined ? input.age : current?.age;
+  const nextDiscoveryEnabled = input.discoveryEnabled !== undefined ? input.discoveryEnabled : current?.discoveryEnabled;
+  if (nextDiscoveryEnabled && (!nextAge || nextAge < 18)) {
+    throw new HttpError(400, 'AGE_REQUIRED_FOR_DISCOVERY', 'Add your age (18 or older) before enabling roommate discovery.');
+  }
   const profile = await prisma.profile.update({
     where: {userId: response.locals.sessionUserId as string},
     data: {
@@ -183,6 +189,7 @@ authRouter.patch('/profile/me', requireSession, asyncRoute(async (request, respo
       ...(input.cityId !== undefined ? {city: cityToDb[input.cityId]} : {}),
       ...(input.neighborhood !== undefined ? {neighborhood: input.neighborhood} : {}),
       ...(input.bio !== undefined ? {bio: input.bio} : {}),
+      ...(input.discoveryEnabled !== undefined ? {discoveryEnabled: input.discoveryEnabled} : {}),
       ...(input.preferences !== undefined ? {preferences: input.preferences as Prisma.InputJsonValue} : {}),
     },
   });
@@ -191,7 +198,7 @@ authRouter.patch('/profile/me', requireSession, asyncRoute(async (request, respo
 
 function serializeProfile(profile: {
   id: string; displayName: string; age: number | null; role: string | null; city: City;
-  neighborhood: string | null; bio: string; preferences: Prisma.JsonValue;
+  neighborhood: string | null; bio: string; preferences: Prisma.JsonValue; discoveryEnabled: boolean;
 } | null) {
   if (!profile) throw new HttpError(500, 'PROFILE_NOT_FOUND', 'The account profile could not be loaded.');
   const parsedPreferences = profile.preferences
@@ -206,5 +213,6 @@ function serializeProfile(profile: {
     neighborhood: profile.neighborhood,
     bio: profile.bio,
     preferences: parsedPreferences,
+    discoveryEnabled: profile.discoveryEnabled,
   };
 }

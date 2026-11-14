@@ -24,6 +24,10 @@ model User {
   blocksGiven UserBlock[] @relation("UserBlocksGiven")
   blocksReceived UserBlock[] @relation("UserBlocksReceived")
   notifications Notification[]
+  discoveryActionsMade DiscoveryAction[] @relation("DiscoveryActionActor")
+  discoveryActionsReceived DiscoveryAction[] @relation("DiscoveryActionTarget")
+  lowMatches Match[] @relation("MatchLowUser")
+  highMatches Match[] @relation("MatchHighUser")
 
   @@index([createdAt])
 }
@@ -38,6 +42,7 @@ model Profile {
   neighborhood String?
   bio          String   @default("") @db.VarChar(500)
   preferences  Json?
+  discoveryEnabled Boolean @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -116,7 +121,8 @@ model TourRequest {
 
 model Conversation {
   id             String                @id @default(cuid())
-  listingId      String
+  listingId      String?
+  matchId        String?               @unique
   ownerId        String
   guestId        String
   ownerReadAt    DateTime?
@@ -124,7 +130,8 @@ model Conversation {
   lastMessageAt  DateTime              @default(now())
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
-  listing        Listing               @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listing        Listing?              @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  match          Match?                @relation(fields: [matchId], references: [id], onDelete: Cascade)
   owner          User                  @relation("ConversationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   guest          User                  @relation("ConversationGuest", fields: [guestId], references: [id], onDelete: Cascade)
   messages       ConversationMessage[]
@@ -174,6 +181,34 @@ model Notification {
   @@index([tourRequestId])
 }
 
+model DiscoveryAction {
+  id         String               @id @default(cuid())
+  actorId    String
+  targetId   String
+  action     DiscoveryActionType
+  createdAt  DateTime             @default(now())
+  actor      User                 @relation("DiscoveryActionActor", fields: [actorId], references: [id], onDelete: Cascade)
+  target     User                 @relation("DiscoveryActionTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([actorId, targetId])
+  @@index([actorId, createdAt])
+  @@index([targetId, action])
+}
+
+model Match {
+  id         String   @id @default(cuid())
+  lowUserId  String
+  highUserId String
+  createdAt  DateTime @default(now())
+  lowUser    User     @relation("MatchLowUser", fields: [lowUserId], references: [id], onDelete: Cascade)
+  highUser   User     @relation("MatchHighUser", fields: [highUserId], references: [id], onDelete: Cascade)
+  conversation Conversation?
+
+  @@unique([lowUserId, highUserId])
+  @@index([lowUserId, createdAt])
+  @@index([highUserId, createdAt])
+}
+
 enum City {
   BENGALURU
   MUMBAI
@@ -220,4 +255,10 @@ enum NotificationType {
   TOUR_CONFIRMED
   TOUR_DECLINED
   TOUR_CANCELLED
+}
+
+enum DiscoveryActionType {
+  PASS
+  LIKE
+  SUPER_LIKE
 }

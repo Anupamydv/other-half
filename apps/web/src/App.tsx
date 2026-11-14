@@ -32,11 +32,11 @@ const GoogleMapsNavigator = lazy(() =>
 const FeedView = lazy(() =>
   import('./components/FeedView').then((module) => ({default: module.FeedView}))
 );
-const SwipeDeckView = lazy(() =>
-  import('./components/SwipeDeckView').then((module) => ({default: module.SwipeDeckView}))
+const DiscoveryView = lazy(() =>
+  import('./components/DiscoveryView').then((module) => ({default: module.DiscoveryView}))
 );
-const MatchesView = lazy(() =>
-  import('./components/MatchesView').then((module) => ({default: module.MatchesView}))
+const RealMatchesView = lazy(() =>
+  import('./components/RealMatchesView').then((module) => ({default: module.RealMatchesView}))
 );
 const ConversationsView = lazy(() =>
   import('./components/ConversationsView').then((module) => ({default: module.ConversationsView}))
@@ -56,9 +56,6 @@ const CreatePostModal = lazy(() =>
 const DetailAndTourModal = lazy(() =>
   import('./components/DetailAndTourModal').then((module) => ({default: module.DetailAndTourModal}))
 );
-const MatchCelebrationModal = lazy(() =>
-  import('./components/MatchCelebrationModal').then((module) => ({default: module.MatchCelebrationModal}))
-);
 
 export default function App() {
   const {
@@ -68,22 +65,12 @@ export default function App() {
     userProfile,
     profiles,
     feedPosts,
-    passedIds,
-    matchedIds,
-    superIds,
-    bookedTours,
-    canUndoSwipe,
-    celebrationProfile,
-    setCelebrationProfile,
     setSelectedCity,
     setSelectedNeighborhood,
     toggleLikePost,
     toggleSavePost,
     addCommentToPost,
     createFeedPost,
-    handleSwipeAction,
-    undoLastSwipe,
-    resetSwipeDeck,
     bookHouseTour,
     updateUserPreferences,
     updateUserProfileDetails,
@@ -156,6 +143,7 @@ export default function App() {
       method: 'PATCH', body: JSON.stringify(payload),
     });
     updateUserProfileDetails(updates);
+    if (updates.cityId) setSelectedCity(updates.cityId);
     if (account) setAccount({...account, profile: result.profile});
   };
 
@@ -164,6 +152,13 @@ export default function App() {
       method: 'PATCH', body: JSON.stringify({preferences}),
     });
     updateUserPreferences(result.profile.preferences);
+    if (account) setAccount({...account, profile: result.profile});
+  };
+
+  const saveDiscoveryEnabled = async (discoveryEnabled: boolean) => {
+    const result = await apiRequest<{profile: AccountResponse['profile']}>('/profile/me', {
+      method: 'PATCH', body: JSON.stringify({discoveryEnabled}),
+    });
     if (account) setAccount({...account, profile: result.profile});
   };
 
@@ -206,14 +201,6 @@ export default function App() {
     setFocusedLandmark(null);
   }, [cityProfiles, selectedFlatId]);
 
-  const swipeDeckProfiles = useMemo(
-    () =>
-      cityProfiles.filter(
-        (p) => !passedIds.includes(p.id) && !matchedIds.includes(p.id)
-      ),
-    [cityProfiles, passedIds, matchedIds]
-  );
-
   const cityPosts = useMemo(() => {
     return feedPosts.filter((post) => {
       if (post.cityId !== selectedCity) return false;
@@ -226,11 +213,6 @@ export default function App() {
       return true;
     });
   }, [feedPosts, selectedCity, selectedNeighborhood]);
-
-  const savedPosts = useMemo(
-    () => feedPosts.filter((p) => p.savedByMe),
-    [feedPosts]
-  );
 
   const handleNavigateToProfile = (profile: RoommateProfile) => {
     setSelectedCity(profile.cityId);
@@ -259,15 +241,6 @@ export default function App() {
     if (window.innerWidth < 1024) {
       setActiveTab('map');
     }
-  };
-
-  const handleOpenChat = (_profileId: string) => {
-    setInteractionNotice('Sample roommate matches do not have real accounts yet. A private chat becomes available after a home visit is confirmed.');
-  };
-
-  const handleSendIcebreaker = (_profileId: string, _text: string) => {
-    setCelebrationProfile(null);
-    handleOpenChat(_profileId);
   };
 
   const handleOpenTourConversation = (conversationId: string) => {
@@ -310,7 +283,7 @@ export default function App() {
                 {id: 'listings', label: 'Homes'},
                 {id: 'map', label: 'Live Map'},
                 {id: 'tours', label: 'Tours'},
-                {id: 'matches', label: `Matches (${matchedIds.length})`},
+                {id: 'matches', label: 'Matches'},
                 {
                   id: 'messages',
                   label: 'Messages',
@@ -356,7 +329,7 @@ export default function App() {
 
       <div className="mx-auto mt-3 max-w-[1240px] px-4 sm:px-6 lg:px-10">
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs leading-5 text-amber-900">
-          Homes, Tours, and Messages use saved API data. Roommate cards and matches are sample content; chats start after a confirmed home visit.
+          Homes, Tours, Messages, and roommate discovery use saved API data. Community feed and map cards are sample content.
         </p>
         {interactionNotice && <div role="status" className="mt-2 flex items-start justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-xs leading-5 text-sky-900"><span>{interactionNotice}</span><button aria-label="Dismiss" onClick={() => setInteractionNotice('')} className="font-bold">×</button></div>}
       </div>
@@ -401,7 +374,7 @@ export default function App() {
                         : 'text-[#64748B] hover:text-[#1E293B]'
                     }`}
                   >
-                    Scroll Feed
+                    Community Feed
                   </button>
                   <button
                     type="button"
@@ -412,7 +385,7 @@ export default function App() {
                         : 'text-[#64748B] hover:text-[#1E293B]'
                     }`}
                   >
-                    Swipe Deck
+                    Find Roommates
                   </button>
                 </div>
               )}
@@ -457,30 +430,22 @@ export default function App() {
                       posts={cityPosts}
                       city={currentCityTheme}
                       profiles={profiles}
-                      matchedIds={matchedIds}
+                      matchedIds={[]}
                       userPrefs={userProfile.preferences}
                       onToggleLike={toggleLikePost}
                       onToggleSave={toggleSavePost}
                       onAddComment={addCommentToPost}
                       onNavigateToFlat={handleNavigateToPost}
                       onOpenDetail={(prof) => setDetailProfile(prof)}
-                      onQuickMatch={(id) => handleSwipeAction(id, 'match')}
+                      onQuickMatch={() => setInteractionNotice('People mentioned in community posts are example profiles. Use Find Roommates to discover real members.')}
                       onOpenCreatePost={() => setShowCreatePost(true)}
                     />
                   </Suspense>
                 ) : (
                   <Suspense fallback={<div className="rounded-3xl bg-white p-8 text-center text-sm text-[#64748B]">Loading roommate discovery…</div>}>
-                    <SwipeDeckView
-                      profiles={swipeDeckProfiles}
-                      city={currentCityTheme}
-                      userPrefs={userProfile.preferences}
-                      canUndo={canUndoSwipe}
-                      onSwipe={handleSwipeAction}
-                      onUndo={undoLastSwipe}
-                      onResetDeck={resetSwipeDeck}
-                      onOpenDetail={(prof) => setDetailProfile(prof)}
-                      onNavigate={handleNavigateToProfile}
-                    />
+                    <DiscoveryView cityId={selectedCity} userPrefs={userProfile.preferences}
+                      onOpenProfileSettings={() => setActiveTab('profile')}
+                      onOpenConversation={handleOpenTourConversation} />
                   </Suspense>
                 )}
               </div>
@@ -538,18 +503,7 @@ export default function App() {
         {/* MATCHES TAB */}
         {activeTab === 'matches' && (
           <Suspense fallback={<div className="rounded-3xl bg-white p-8 text-center text-sm text-[#64748B]">Loading matches…</div>}>
-            <MatchesView
-              profiles={profiles}
-              matchedIds={matchedIds}
-              superIds={superIds}
-              bookedTours={bookedTours}
-              savedPosts={savedPosts}
-              userPrefs={userProfile.preferences}
-              onOpenChat={handleOpenChat}
-              onOpenDetail={(prof) => setDetailProfile(prof)}
-              onNavigateToProfile={handleNavigateToProfile}
-              onNavigateToPost={handleNavigateToPost}
-            />
+            <RealMatchesView userPrefs={userProfile.preferences} onOpenConversation={handleOpenTourConversation} />
           </Suspense>
         )}
 
@@ -567,8 +521,9 @@ export default function App() {
               userProfile={userProfile}
               onUpdatePreferences={savePreferences}
               onUpdateDetails={saveProfileDetails}
+              discoveryEnabled={account.profile.discoveryEnabled}
+              onUpdateDiscoveryEnabled={saveDiscoveryEnabled}
               onChangePassword={changePassword}
-              onResetSwipeDeck={resetSwipeDeck}
             />
           </Suspense>
         )}
@@ -633,26 +588,16 @@ export default function App() {
           <DetailAndTourModal
             profile={detailProfile}
             userPrefs={userProfile.preferences}
-            isMatched={matchedIds.includes(detailProfile.id)}
+            isMatched={false}
+            bookingDisabled
             onClose={() => setDetailProfile(null)}
-            onMatch={(id) => handleSwipeAction(id, 'match')}
+            onMatch={() => setInteractionNotice('This map profile is sample content. Use Find Roommates to connect with real members.')}
             onNavigateToFlat={handleNavigateToProfile}
             onBookTour={bookHouseTour}
           />
         </Suspense>
       )}
 
-      {/* Match Celebration Modal */}
-      {celebrationProfile && (
-        <Suspense fallback={null}>
-          <MatchCelebrationModal
-            profile={celebrationProfile}
-            userPrefs={userProfile.preferences}
-            onClose={() => setCelebrationProfile(null)}
-            onSendIcebreaker={handleSendIcebreaker}
-          />
-        </Suspense>
-      )}
     </div>
   );
 }
