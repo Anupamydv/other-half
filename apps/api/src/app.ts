@@ -15,6 +15,7 @@ import {notificationsRouter} from './routes/notifications.js';
 import {discoveryRouter} from './routes/discovery.js';
 import {safetyRouter} from './routes/safety.js';
 import {listingMediaRouter} from './routes/listingMedia.js';
+import {accountDataRouter} from './routes/accountData.js';
 
 export const app = express();
 
@@ -83,6 +84,7 @@ app.use('/api/v1', conversationsRouter);
 app.use('/api/v1', notificationsRouter);
 app.use('/api/v1', discoveryRouter);
 app.use('/api/v1', safetyRouter);
+app.use('/api/v1', accountDataRouter);
 app.use('/api/v1', healthRouter);
 
 app.use((_request, response) => {

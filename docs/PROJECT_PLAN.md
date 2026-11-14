@@ -81,6 +81,7 @@ Discovery is account-backed and city-scoped. Profiles are hidden until the membe
 
 ### 6. Launch readiness
 
+- [x] Provide an authenticated JSON export of the member’s app data without authentication secrets.
 - Automated unit/integration/accessibility/e2e coverage; dependency/security review; performance and abuse testing.
 - Moderation operations, privacy policy/terms, account export/deletion, support workflow, backups and restore drills.
 - Production observability, alerting, rollout/rollback, and environment-specific configuration.

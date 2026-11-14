@@ -34,6 +34,7 @@ We are starting with a modular monolith. Housing discovery, profiles, matching, 
 - Helmet sets standard HTTP security headers; CORS is restricted to the configured web origin; request bodies have a size limit.
 - Production sessions will use secure, HTTP-only, same-site cookies and server-side revocation. Passwords will use a deliberately slow password hash; raw credentials never enter logs.
 - Every endpoint that changes data will validate input, authenticate the caller, authorize the target resource, and use database constraints/transactions where needed.
+- Members can download an authenticated JSON export of their profile and account activity. Password hashes, session tokens, and unrelated members’ private profiles are excluded; exported listing-photo links are temporary.
 - Migrations, secrets, backups, structured logs, rate limits, monitoring, and deployment automation are required before public launch.
 
 ## Repository layout
